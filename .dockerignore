@@ -1,0 +1,12 @@
+venv/
+.env
+__pycache__/
+.git/
+*.pyc
+.streamlit/secrets.toml
+artifacts/
+logs/
+data/personal_profiles.json
+frontend/data/personal_profiles.json
+.tmp.drivedownload/
+.tmp.driveupload/

@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+*.secret
+
+# Local user/session data
+data/personal_profiles.json
+frontend/data/personal_profiles.json
+
+# Runtime output
+logs/
+*.log
+.cache/
+cache/
+
+# Generated media and submission artifacts
+artifacts/
+
+# Temporary sync folders
+.tmp.drivedownload/
+.tmp.driveupload/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
