@@ -268,11 +268,29 @@ def display_note_text(text):
         out = out.replace(jp, en)
     return out
 
-def switch_mode(mode):
-    st.session_state.naomi_active_mode = mode
-    st.session_state.suppress_bottom_chat_once = True
+def phase_label(result):
+    phase = (getattr(result, "asurada_state", {}) or {}).get("phase")
+    if not phase:
+        return None
+    labels = {
+        "LISTEN": "現在の応対: 傾聴中",
+        "PROBE": "現在の応対: 確認中",
+        "ORGANIZE": "現在の応対: 整理中",
+        "ADVISE": "現在の応対: 提案中",
+        "RED_FLAG": "現在の応対: 安全確認中",
+    }
+    return labels.get(phase, f"現在の応対: {phase}")
+
+def reset_agent_session():
+    if "agent_core" in st.session_state and hasattr(st.session_state.agent_core, "reset_session"):
+        st.session_state.agent_core.reset_session()
     st.session_state.last_result = None
     st.session_state.proactive_question = None
+
+def switch_mode(mode):
+    reset_agent_session()
+    st.session_state.naomi_active_mode = mode
+    st.session_state.suppress_bottom_chat_once = True
     st.rerun()
 
 def keep_menu_top_once():
@@ -435,8 +453,8 @@ if theme_mode == "light":
         border-radius: 20px !important;
         font-size: {"1.4rem" if is_large else "0.98rem"} !important;
     }}
-    .stTextInput input::placeholder {{
-        color: rgba(52, 73, 94, 0.45) !important;
+    .stChatInput textarea::placeholder, .stTextArea textarea::placeholder, .stTextInput input::placeholder {{
+        color: #8A8F98 !important;
         opacity: 1 !important;
     }}
     
@@ -700,8 +718,8 @@ else:
         border-radius: 20px !important;
         font-size: {"1.4rem" if is_large else "0.98rem"} !important;
     }}
-    .stTextInput input::placeholder {{
-        color: rgba(203, 213, 225, 0.48) !important;
+    .stChatInput textarea::placeholder, .stTextArea textarea::placeholder, .stTextInput input::placeholder {{
+        color: #9AA4B2 !important;
         opacity: 1 !important;
     }}
     
@@ -1541,6 +1559,53 @@ with card_col2:
     btn_label_4 = t("btn_selected") if is_active_4 else t("btn_select")
     if st.button(btn_label_4, key="mode_btn_4", use_container_width=True, type="primary" if is_active_4 else "secondary"):
         switch_mode("🩺 今の健康状態を一緒に整理しましょう")
+
+free_text_bg = "rgba(106, 140, 175, 0.045)" if theme_mode == "light" else "rgba(197, 168, 128, 0.06)"
+free_text_border = "rgba(106, 140, 175, 0.14)" if theme_mode == "light" else "rgba(197, 168, 128, 0.14)"
+free_text_color = "#4f6f90" if theme_mode == "light" else "#c5a880"
+st.markdown(f"""
+<div style="background:{free_text_bg}; border:1px solid {free_text_border}; border-radius:18px; padding:1rem 1.1rem; margin:1.4rem 0 1rem 0;">
+    <div style="font-family:'Noto Serif JP', serif; color:{free_text_color}; font-size:0.98rem; margin-bottom:0.25rem;">言葉にできる範囲で、今の状態を書いても大丈夫です</div>
+    <div style="color:gray; font-size:0.84rem;">ボタンだけでも使えます。無理に書かなくても大丈夫です。</div>
+</div>
+""", unsafe_allow_html=True)
+with st.form("state_free_text_form", clear_on_submit=True):
+    state_free_text = st.text_input(
+        "任意の入力",
+        placeholder="例：最近仕事が忙しくて疲れています",
+        label_visibility="collapsed",
+    )
+    submitted_free_text = st.form_submit_button("そっと送る", use_container_width=False)
+if submitted_free_text and state_free_text.strip():
+    result = st.session_state.agent_core.process_input(state_free_text.strip(), active_profile())
+    st.session_state.last_result = (state_free_text.strip(), result)
+    st.session_state.proactive_question = None
+    st.rerun()
+
+if st.session_state.last_result:
+    _, result = st.session_state.last_result
+    if result.text:
+        visible_phase_label = phase_label(result)
+        if visible_phase_label:
+            phase_bg = "rgba(106, 140, 175, 0.08)" if theme_mode == "light" else "rgba(197, 168, 128, 0.10)"
+            phase_border = "rgba(106, 140, 175, 0.18)" if theme_mode == "light" else "rgba(197, 168, 128, 0.18)"
+            phase_color = "#4f6f90" if theme_mode == "light" else "#c5a880"
+            st.markdown(f"""
+            <div style="display:inline-block; background:{phase_bg}; border:1px solid {phase_border}; color:{phase_color}; border-radius:999px; padding:0.35rem 0.75rem; font-size:0.85rem; margin:0.6rem 0 0.2rem 0;">
+                {visible_phase_label}
+            </div>
+            """, unsafe_allow_html=True)
+        result_text_display = display_response_text(result.text, result.scenario_id)
+        result_bg = "rgba(255, 255, 255, 0.55)" if theme_mode == "light" else "rgba(13, 20, 35, 0.45)"
+        result_border = "rgba(106, 140, 175, 0.14)" if theme_mode == "light" else "rgba(197, 168, 128, 0.14)"
+        result_title = "#6a8caf" if theme_mode == "light" else "#c5a880"
+        st.markdown(f"""
+        <div style="background: {result_bg}; border: 1px solid {result_border}; border-radius: 20px; padding: 1.4rem 1.5rem; margin: 1.4rem 0 1.2rem 0; box-shadow: 0 10px 30px rgba(0,0,0,0.02);">
+            <h5 style="margin:0 0 0.7rem 0; font-family:'Noto Serif JP', serif; color: {result_title}; font-size: 1.05rem; letter-spacing: 0.05em;">🌙 NAOMI</h5>
+            <p style="font-size: 1.02rem; line-height: 1.8; margin: 0;">{result_text_display}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
 st.markdown("<hr style='border: 0; border-top: 1px solid rgba(106, 140, 175, 0.05); margin: 1.5rem 0;'>", unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────────────────
@@ -1554,18 +1619,36 @@ if st.session_state.naomi_active_mode == "🌙 少し疲れている":
     
     _exp_label = "💡 How to Use" if st.session_state.get("language", "JP") == "EN" else "💡 迷ったときの使い方"
     with st.expander(_exp_label, expanded=False):
+        quick_guide_title = "Quick Guide" if st.session_state.get("language", "JP") == "EN" else "使い方の目安"
+        quick_guide_body = tr(
+            "Just choose the closest option. NAOMI will keep words gentle and receive your current state.<br>If needed, a small note will appear below.",
+            "近いものを選ぶだけで大丈夫です。NAOMIが言葉の量を控えめにしながら、今の状態を受け止めます。<br>必要に応じて、画面下部に<b>小さなメモ</b>が表示されます。"
+        )
+        quick_guide_label = tr("👉 Quick guideline:", "👉 迷ったときの目安：")
+        quick_guide_step_1 = tr(
+            'If you are tired, start with <b>"🌙 Slightly tired"</b>.',
+            "疲れている時は、まず <b>「🌙 少し疲れている」</b> を選んでください。"
+        )
+        quick_guide_step_2 = tr(
+            'If your mind won\'t stop racing, <b>"🧠 Anxious & restless"</b> may fit.',
+            "考えが止まらない時は <b>「🧠 考えすぎている」</b> が近いかもしれません。"
+        )
+        quick_guide_step_3 = tr(
+            'For physical symptoms, choose <b>"🩺 Let\'s organize"</b>.',
+            "体調や症状を伝えたい時は、<b>「🩺 今の健康状態を一緒に整理しましょう」</b> を選んでください。"
+        )
         st.markdown(f"""
         <div style="background: {card_bg_guide}; border: 1px solid {border_color_guide}; border-radius: 20px; padding: 1.5rem; margin-bottom: 1rem;">
-            <h4 style="margin-top:0; font-family:'Noto Serif JP', serif; font-size: 1.1rem; color: {accent_color}; margin-bottom: 0.8rem; letter-spacing: 0.05em;"><span class="emoji-dim">💡</span> {"Quick Guide" if st.session_state.get("language", "JP") == "EN" else "使い方の目安"}</h4>
+            <h4 style="margin-top:0; font-family:'Noto Serif JP', serif; font-size: 1.1rem; color: {accent_color}; margin-bottom: 0.8rem; letter-spacing: 0.05em;"><span class="emoji-dim">💡</span> {quick_guide_title}</h4>
         <p style="font-size: 0.95rem; line-height: 1.7; margin-bottom: 1rem; color: {text_color_guide}; font-weight: 300;">
-            {tr("Just choose the closest option. NAOMI will keep words gentle and receive your current state.<br>If needed, a small note will appear below.", "近いものを選ぶだけで大丈夫です。NAOMIが言葉の量を控えめにしながら、今の状態を受け止めます。<br>必要に応じて、画面下部に<b>小さなメモ</b>が表示されます。")}
+            {quick_guide_body}
         </p>
         <div style="font-size: 0.9rem; line-height: 1.6; color: {text_color_guide}; font-weight: 300;">
-            <b>{tr("👉 Quick guideline:", "👉 迷ったときの目安：")}</b>
+            <b>{quick_guide_label}</b>
             <ol style="margin-top: 0.3rem; padding-left: 1.2rem;">
-                <li>{tr("If you are tired, start with <b>\"🌙 Slightly tired\"</b>.", "疲れている時は、まず <b>「🌙 少し疲れている」</b> を選んでください。")}</li>
-                <li>{tr("If your mind won't stop racing, <b>\"🧠 Anxious & restless\"</b> may fit.", "考えが止まらない時は <b>「🧠 考えすぎている」</b> が近いかもしれません。")}</li>
-                <li>{tr("For physical symptoms, choose <b>\"🩺 Let's organize\"</b>.", "体調や症状を伝えたい時は、<b>「🩺 今の健康状態を一緒に整理しましょう」</b> を選んでください。")}</li>
+                <li>{quick_guide_step_1}</li>
+                <li>{quick_guide_step_2}</li>
+                <li>{quick_guide_step_3}</li>
             </ol>
         </div>
         </div>
@@ -1634,19 +1717,6 @@ if st.session_state.naomi_active_mode == "🌙 少し疲れている":
     # Accessibility Mode ガラスカード
     st.markdown('<div class="accessibility-container">', unsafe_allow_html=True)
     _acc_title = "♿ Accessibility Options" if st.session_state.get("language", "JP") == "EN" else "♿ 入力を楽にしたい"
-    if st.session_state.last_result:
-        _, result = st.session_state.last_result
-        if result.text:
-            result_text_display = display_response_text(result.text, result.scenario_id)
-            result_bg = "rgba(255, 255, 255, 0.55)" if theme_mode == "light" else "rgba(13, 20, 35, 0.45)"
-            result_border = "rgba(106, 140, 175, 0.14)" if theme_mode == "light" else "rgba(197, 168, 128, 0.14)"
-            result_title = "#6a8caf" if theme_mode == "light" else "#c5a880"
-            st.markdown(f"""
-            <div style="background: {result_bg}; border: 1px solid {result_border}; border-radius: 20px; padding: 1.4rem 1.5rem; margin: 1.4rem 0 1.2rem 0; box-shadow: 0 10px 30px rgba(0,0,0,0.02);">
-                <h5 style="margin:0 0 0.7rem 0; font-family:'Noto Serif JP', serif; color: {result_title}; font-size: 1.05rem; letter-spacing: 0.05em;">🌙 NAOMI</h5>
-                <p style="font-size: 1.02rem; line-height: 1.8; margin: 0;">{result_text_display}</p>
-            </div>
-            """, unsafe_allow_html=True)
 
     st.markdown(f"<p style='text-align: center; font-family: \"Noto Serif JP\", serif; font-size: 1.1rem; margin-bottom: 1.2rem; font-weight: 400;'>{_acc_title}</p>", unsafe_allow_html=True)
     
@@ -1872,6 +1942,7 @@ if st.session_state.naomi_active_mode == "🧠 考えすぎている":
             st.rerun()
     with mental_action_cols[2]:
         if st.button(tr("🔄 Finish for today", "🔄 今日はここまでにする"), key="reset_mental_memo", use_container_width=True):
+            reset_agent_session()
             for key in ["mental_state", "mental_sleep", "mental_life", "mental_support"]:
                 st.session_state[key] = []
             st.session_state.mental_note = ""
@@ -2089,7 +2160,8 @@ if st.session_state.naomi_active_mode == "♿ 入力を楽にしたい":
 # Section 4: 🩺 今の健康状態を一緒に整理しましょう
 # ──────────────────────────────────────────────────────────
 if st.session_state.naomi_active_mode == "🩺 今の健康状態を一緒に整理しましょう":
-    st.markdown(f"### {'🩺 Let\'s gently organize your symptoms' if st.session_state.get('language', 'JP') == 'EN' else '🩺 今の健康状態を一緒に整理しましょう'}")
+    health_section_title = "🩺 Let's gently organize your symptoms" if st.session_state.get("language", "JP") == "EN" else "🩺 今の健康状態を一緒に整理しましょう"
+    st.markdown(f"### {health_section_title}")
     
     # はじめの案内
     guide_bg_clinic = "rgba(106, 140, 175, 0.05)" if theme_mode == "light" else "rgba(197, 168, 128, 0.05)"
@@ -2334,6 +2406,7 @@ if st.session_state.naomi_active_mode == "🩺 今の健康状態を一緒に整
     with act_cols[2]:
         reset_btn_type = "primary" if active_btn == "reset" else "secondary"
         if st.button("🔄 Finish for Today" if st.session_state.get("language", "JP") == "EN" else "🔄 今日はここまでにする", type=reset_btn_type, use_container_width=True, key="reset_btn"):
+            reset_agent_session()
             st.session_state.clinic_active_btn = "reset"
             st.session_state.clinic_feedback_msg = ("Finished for today. You can return anytime at your own pace." if st.session_state.get("language", "JP") == "EN" else "ここまでにしました。あなたのペースで、またいつでも戻れます。")
             
@@ -2366,7 +2439,6 @@ show_bottom_chat = (
     not suppress_bottom_chat
     and st.session_state.naomi_screen != "state"
 )
-show_chat_input = not suppress_bottom_chat
 
 if show_bottom_chat:
     # ── 静かな待機中インジケーター ──
@@ -2380,7 +2452,7 @@ if show_bottom_chat:
     </div>
     """, unsafe_allow_html=True)
 
-user_input = st.chat_input(tr("Reply to NAOMI, or say anything freely...", "NAOMIに返答する、または自由に話しかける…")) if show_chat_input else None
+user_input = st.chat_input(tr("Example: I have been busy with work and feel tired", "例：最近仕事が忙しくて疲れています"))
 
 if user_input:
     try:
@@ -2397,6 +2469,29 @@ if user_input:
 if st.session_state.last_result and not suppress_bottom_chat and st.session_state.naomi_screen != "state":
     input_text, result = st.session_state.last_result
     profile = active_profile()
+
+    visible_phase_label = phase_label(result)
+    if visible_phase_label:
+        phase_bg = "rgba(106, 140, 175, 0.08)" if theme_mode == "light" else "rgba(197, 168, 128, 0.10)"
+        phase_border = "rgba(106, 140, 175, 0.18)" if theme_mode == "light" else "rgba(197, 168, 128, 0.18)"
+        phase_color = "#4f6f90" if theme_mode == "light" else "#c5a880"
+        st.markdown(f"""
+        <div style="display:inline-block; background:{phase_bg}; border:1px solid {phase_border}; color:{phase_color}; border-radius:999px; padding:0.35rem 0.75rem; font-size:0.85rem; margin-bottom:0.8rem;">
+            {visible_phase_label}
+        </div>
+        """, unsafe_allow_html=True)
+        with st.expander("Debug", expanded=False):
+            internal_state = getattr(result, "asurada_state", {}) or {}
+            core_state = getattr(st.session_state.agent_core, "asurada", {}) or {}
+            red_flag_state = getattr(result, "red_flag", {}) or {}
+            st.write({
+                "phase": internal_state.get("phase"),
+                "probe_count": core_state.get("probe_count", 0),
+                "red_flag.triggered": red_flag_state.get("triggered", False),
+            })
+            if st.button("状態をリセット", key="reset_asurada_state_bottom"):
+                reset_agent_session()
+                st.rerun()
 
     # 1. レッドフラグ (段階的表示)
     if result.red_flags:
