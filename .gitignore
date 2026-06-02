@@ -34,7 +34,10 @@ logs/
 cache/
 
 # Generated media and submission artifacts
-artifacts/
+artifacts/*
+!artifacts/submission_cloudrun_info.md
+!artifacts/phase_home_chat_restore_snapshot/
+!artifacts/phase_home_chat_restore_snapshot/**
 
 # Temporary sync folders
 .tmp.drivedownload/
