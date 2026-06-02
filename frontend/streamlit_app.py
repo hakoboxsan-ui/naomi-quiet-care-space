@@ -50,7 +50,7 @@ if "current_user_id" not in st.session_state:
 if "theme_mode" not in st.session_state:
     st.session_state.theme_mode = "light"
 if "naomi_screen" not in st.session_state:
-    st.session_state.naomi_screen = "home"
+    st.session_state.naomi_screen = "start"
 if "language" not in st.session_state:
     st.session_state.language = "JP"
 
@@ -63,6 +63,13 @@ if query_screen == "home":
         st.session_state.language = query_lang
         st.session_state.last_nav_key = f"home:{query_lang}"
     st.session_state.naomi_screen = "home"
+elif query_screen == "start":
+    if query_lang in ["JP", "EN"] and st.session_state.get("last_nav_key") != f"start:{query_lang}":
+        st.session_state.language = query_lang
+        st.session_state.last_nav_key = f"start:{query_lang}"
+        st.session_state.last_result = None
+        st.session_state.proactive_question = None
+    st.session_state.naomi_screen = "start"
 elif query_screen == "state":
     nav_key = f"{query_screen}:{query_mode}:{st.session_state.get('language', 'JP')}"
     if query_lang in ["JP", "EN"]:
@@ -81,6 +88,10 @@ elif query_screen == "state":
         }
         st.session_state.naomi_active_mode = mode_map.get(query_mode, "")
     st.session_state.naomi_screen = "state"
+elif query_screen is None:
+    if query_lang in ["JP", "EN"]:
+        st.session_state.language = query_lang
+    st.session_state.naomi_screen = "start"
 
 # 笏笏 螟夊ｨ隱槭ユ繧ｭ繧ｹ繝郁ｾ樊嶌 (譛蟆剰恭隱槭Δ繝ｼ繝・ 笏笏
 TEXT = {
@@ -1144,7 +1155,9 @@ div[data-baseweb="popover"] [role="option"] * {
     max-width: 980px;
     margin: 0 auto;
 }
-.naomi-home-action-card {
+.naomi-home-action-card,
+.naomi-home-action-card:visited {
+    display: block;
     min-height: 124px;
     padding: 1.25rem 1.2rem;
     border-radius: 28px;
@@ -1154,6 +1167,13 @@ div[data-baseweb="popover"] [role="option"] * {
     text-align: center;
     backdrop-filter: blur(20px) saturate(135%);
     -webkit-backdrop-filter: blur(20px) saturate(135%);
+    text-decoration: none !important;
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+.naomi-home-action-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(106, 140, 175, 0.24);
+    background: rgba(255, 255, 255, 0.62);
 }
 .naomi-home-action-icon {
     width: 58px;
@@ -1191,6 +1211,89 @@ div[data-baseweb="popover"] [role="option"] * {
     font-size: 0.9rem;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.68);
 }
+.naomi-home-chat-message {
+    position: relative;
+    z-index: 1;
+}
+.naomi-home-chat-form-anchor {
+    max-width: 860px;
+    margin: 0 auto;
+}
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] {
+    max-width: 860px;
+    margin: 0 auto 1.6rem auto;
+    border: 1px solid rgba(106, 140, 175, 0.13);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.30);
+    box-shadow: 0 12px 34px rgba(106, 140, 175, 0.035);
+}
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] input {
+    border-radius: 999px !important;
+}
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] div[data-baseweb="input"],
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] div[data-baseweb="input"] > div,
+.naomi-start-form-anchor + div [data-testid="stForm"] div[data-baseweb="input"],
+.naomi-start-form-anchor + div [data-testid="stForm"] div[data-baseweb="input"] > div,
+.naomi-state-chat-form-anchor + div [data-testid="stForm"] div[data-baseweb="input"],
+.naomi-state-chat-form-anchor + div [data-testid="stForm"] div[data-baseweb="input"] > div {
+    background: rgba(255, 255, 255, 0.88) !important;
+    border-color: rgba(106, 140, 175, 0.16) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+}
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] div[data-baseweb="input"]:focus-within,
+.naomi-start-form-anchor + div [data-testid="stForm"] div[data-baseweb="input"]:focus-within,
+.naomi-state-chat-form-anchor + div [data-testid="stForm"] div[data-baseweb="input"]:focus-within {
+    border-color: rgba(106, 140, 175, 0.28) !important;
+    box-shadow: 0 0 0 3px rgba(106, 140, 175, 0.08), 0 10px 28px rgba(106, 140, 175, 0.045) !important;
+}
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] input,
+.naomi-start-form-anchor + div [data-testid="stForm"] input {
+    background: rgba(255, 255, 255, 0.86) !important;
+    border: 1px solid rgba(106, 140, 175, 0.16) !important;
+    color: #33485d !important;
+    box-shadow: 0 10px 28px rgba(106, 140, 175, 0.045), inset 0 1px 0 rgba(255,255,255,0.92) !important;
+}
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] input:focus,
+.naomi-start-form-anchor + div [data-testid="stForm"] input:focus {
+    border-color: rgba(106, 140, 175, 0.28) !important;
+    box-shadow: 0 0 0 3px rgba(106, 140, 175, 0.08), 0 10px 28px rgba(106, 140, 175, 0.045) !important;
+    outline: none !important;
+}
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] input::placeholder,
+.naomi-start-form-anchor + div [data-testid="stForm"] input::placeholder {
+    color: rgba(72, 91, 112, 0.48) !important;
+    opacity: 1 !important;
+}
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] [data-testid="stFormSubmitButton"],
+.naomi-state-chat-form-anchor + div [data-testid="stForm"] [data-testid="stFormSubmitButton"] {
+    display: flex !important;
+    justify-content: center !important;
+}
+.naomi-home-chat-form-anchor + div [data-testid="stForm"] [data-testid="stFormSubmitButton"] > button,
+.naomi-state-chat-form-anchor + div [data-testid="stForm"] [data-testid="stFormSubmitButton"] > button {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+.naomi-state-chat-form-anchor {
+    max-width: 860px;
+    margin: 0 auto;
+}
+.naomi-state-chat-form-anchor + div [data-testid="stForm"] input {
+    border-radius: 999px !important;
+    background: rgba(255, 255, 255, 0.86) !important;
+    border: 1px solid rgba(106, 140, 175, 0.16) !important;
+    color: #33485d !important;
+}
+.naomi-state-chat-form-anchor + div [data-testid="stForm"] input:focus {
+    border-color: rgba(106, 140, 175, 0.28) !important;
+    box-shadow: 0 0 0 3px rgba(106, 140, 175, 0.08) !important;
+    outline: none !important;
+}
+.naomi-state-chat-form-anchor + div [data-testid="stForm"] input::placeholder {
+    color: rgba(72, 91, 112, 0.48) !important;
+    opacity: 1 !important;
+}
 .naomi-home-actions-buttons [data-testid="column"] {
     padding: 0 0.45rem;
 }
@@ -1218,6 +1321,300 @@ div[data-baseweb="popover"] [role="option"] * {
 .naomi-home-link-button:hover {
     border-color: rgba(106, 140, 175, 0.35);
     background: rgba(255, 255, 255, 0.66);
+}
+.naomi-start-shell {
+    position: relative;
+    overflow: hidden;
+    max-width: 860px;
+    min-height: 360px;
+    margin: 2.2rem auto 0;
+    padding: 3.4rem 1.8rem 2.2rem;
+    text-align: center;
+    border-radius: 34px;
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.74), rgba(246,249,252,0.34)),
+        radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.30) 52%, rgba(255, 255, 255, 0.16) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.62);
+    box-shadow: 0 32px 96px rgba(106, 140, 175, 0.13), inset 0 1px 0 rgba(255,255,255,0.74);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
+}
+.naomi-start-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 30% 18%, rgba(255,255,255,0.74), transparent 24%),
+        radial-gradient(circle at 76% 28%, rgba(219, 231, 241, 0.38), transparent 30%),
+        linear-gradient(90deg, transparent 0%, rgba(106, 140, 175, 0.045) 50%, transparent 100%);
+    pointer-events: none;
+}
+.naomi-start-shell::after {
+    content: "";
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(106, 140, 175, 0.16), transparent);
+}
+.naomi-start-copy {
+    position: relative;
+    z-index: 1;
+    max-width: 560px;
+    margin: 0 auto;
+}
+.naomi-start-still-life {
+    position: absolute;
+    right: 70px;
+    bottom: 46px;
+    width: 160px;
+    height: 190px;
+    opacity: 0.54;
+    pointer-events: none;
+}
+.naomi-start-vase {
+    position: absolute;
+    right: 18px;
+    bottom: 0;
+    width: 58px;
+    height: 112px;
+    border-radius: 28px 28px 18px 18px;
+    background: linear-gradient(150deg, rgba(255,255,255,0.82), rgba(223,229,232,0.46));
+    border: 1px solid rgba(106, 140, 175, 0.13);
+    box-shadow: 0 18px 34px rgba(106, 140, 175, 0.07);
+}
+.naomi-start-branch {
+    position: absolute;
+    right: 54px;
+    bottom: 72px;
+    width: 1px;
+    height: 118px;
+    background: rgba(126, 152, 122, 0.46);
+    transform: rotate(-18deg);
+    transform-origin: bottom;
+}
+.naomi-start-branch::before,
+.naomi-start-branch::after {
+    content: "";
+    position: absolute;
+    width: 36px;
+    height: 15px;
+    border-radius: 50%;
+    background: rgba(141, 164, 126, 0.28);
+}
+.naomi-start-branch::before {
+    left: -34px;
+    top: 26px;
+    transform: rotate(28deg);
+}
+.naomi-start-branch::after {
+    right: -32px;
+    top: 58px;
+    transform: rotate(-22deg);
+}
+.naomi-start-mug {
+    position: absolute;
+    right: 70px;
+    bottom: 4px;
+    width: 58px;
+    height: 48px;
+    border-radius: 0 0 20px 20px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.90), rgba(232,226,218,0.58));
+    border: 1px solid rgba(184, 172, 158, 0.22);
+}
+.naomi-start-mug::after {
+    content: "";
+    position: absolute;
+    right: -16px;
+    top: 11px;
+    width: 22px;
+    height: 24px;
+    border: 5px solid rgba(232,226,218,0.60);
+    border-left: 0;
+    border-radius: 0 15px 15px 0;
+}
+.naomi-start-symbol {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.66);
+    border: 1px solid rgba(255,255,255,0.78);
+    box-shadow: 0 18px 52px rgba(106, 140, 175, 0.12), inset 0 1px 0 rgba(255,255,255,0.92);
+    color: #d9a94f;
+    font-size: 1.7rem;
+}
+.naomi-start-greeting {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 1.55rem;
+    font-weight: 300;
+    color: #40566d;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.45rem;
+}
+.naomi-start-name {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 1.65rem;
+    font-weight: 300;
+    color: #2f4053;
+    margin-bottom: 1.75rem;
+}
+.naomi-start-main {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 1.56rem;
+    font-weight: 300;
+    color: #2f4964;
+    letter-spacing: 0.06em;
+    margin-bottom: 1.25rem;
+}
+.naomi-start-sub {
+    color: #6d8092;
+    font-size: 0.96rem;
+    line-height: 2.05;
+    margin-bottom: 2rem;
+}
+.naomi-start-divider {
+    height: 1px;
+    max-width: 620px;
+    margin: 1.55rem auto;
+    background: linear-gradient(90deg, transparent, rgba(106, 140, 175, 0.16), transparent);
+}
+.naomi-start-form-anchor {
+    max-width: 640px;
+    margin: -0.55rem auto 0;
+}
+.element-container:has(.naomi-start-form-anchor) + div {
+    max-width: 640px;
+    margin: -0.55rem auto 0;
+}
+.element-container:has(.naomi-start-form-anchor) + div [data-testid="stForm"],
+.element-container:has(.naomi-start-form-anchor) + div form {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+.naomi-start-form-anchor + div [data-testid="stForm"] {
+    max-width: 640px;
+    margin: 0 auto 1.1rem auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+}
+.naomi-start-form-anchor + div [data-testid="stForm"] .stTextInput,
+.naomi-start-form-anchor + div [data-testid="stForm"] .stTextInput > div,
+.naomi-start-form-anchor + div [data-testid="stForm"] .stTextInput > div > div {
+    background: transparent !important;
+    border-radius: 999px !important;
+}
+.naomi-start-form-anchor + div [data-testid="stForm"] .stTextInput div[data-baseweb="input"] {
+    overflow: hidden !important;
+    background: rgba(255, 255, 255, 0.90) !important;
+    border: 1px solid rgba(106, 140, 175, 0.16) !important;
+    border-radius: 999px !important;
+}
+.naomi-start-form-anchor + div [data-testid="stForm"] input {
+    min-height: 54px;
+    border-radius: 999px !important;
+    background: rgba(255, 255, 255, 0.88) !important;
+    border: 1px solid rgba(106, 140, 175, 0.16) !important;
+    text-align: center !important;
+    box-shadow: 0 12px 30px rgba(106, 140, 175, 0.05), inset 0 1px 0 rgba(255,255,255,0.86) !important;
+}
+.element-container:has(.naomi-start-form-anchor) + div .stButton {
+    display: flex;
+    justify-content: center;
+}
+.element-container:has(.naomi-start-form-anchor) + div [data-testid="stForm"] [data-testid="stFormSubmitButton"] {
+    display: flex !important;
+    justify-content: center !important;
+}
+.element-container:has(.naomi-start-form-anchor) + div [data-testid="stForm"] [data-testid="stFormSubmitButton"] > button,
+.element-container:has(.naomi-start-form-anchor) + div [data-testid="stForm"] button[kind="secondaryFormSubmit"] {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+.naomi-start-form-anchor + div [data-testid="stForm"] .stButton > button {
+    min-height: 44px !important;
+    border-radius: 999px !important;
+    margin: 0.75rem auto 0 !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+    display: block !important;
+    border-color: rgba(106, 140, 175, 0.14) !important;
+    background: rgba(236, 242, 248, 0.70) !important;
+}
+.naomi-start-actions {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+    max-width: 820px;
+    margin: 0.45rem auto 0;
+    padding: 0.55rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.58);
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.56), rgba(244,248,251,0.34));
+    box-shadow: 0 22px 56px rgba(106, 140, 175, 0.09);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+.naomi-start-actions::before {
+    content: "";
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    top: -1.55rem;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(106, 140, 175, 0.12), transparent);
+}
+.naomi-start-action,
+.naomi-start-action:visited {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.42rem;
+    min-height: 52px;
+    border-radius: 999px;
+    border: 1px solid rgba(106, 140, 175, 0.12);
+    background: rgba(255, 255, 255, 0.46);
+    color: #40566d !important;
+    text-decoration: none !important;
+    font-weight: 500;
+    font-size: 0.92rem;
+    letter-spacing: 0.02em;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.naomi-start-action span {
+    color: #d9a94f;
+    font-size: 0.96rem;
+    line-height: 1;
+    opacity: 0.86;
+}
+.naomi-start-action:hover {
+    border-color: rgba(106, 140, 175, 0.34);
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: 0 12px 28px rgba(106, 140, 175, 0.10);
+    transform: translateY(-1px);
+}
+.naomi-start-response {
+    max-width: 620px;
+    margin: 1.4rem auto 0;
+    padding: 1.25rem 1.35rem;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(106, 140, 175, 0.14);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.025);
+    text-align: left;
 }
 @media (max-width: 780px) {
     .naomi-home-shell {
@@ -1270,6 +1667,66 @@ div[data-baseweb="popover"] [role="option"] * {
         font-size: 0.78rem;
         line-height: 1.45;
     }
+    .naomi-start-shell {
+        margin-top: 1rem;
+        padding: 2rem 1rem 1.25rem;
+        border-radius: 24px;
+        min-height: 0;
+    }
+    .naomi-start-still-life {
+        display: none;
+    }
+    .naomi-start-greeting,
+    .naomi-start-main {
+        font-size: 1.25rem;
+    }
+    .naomi-start-name {
+        font-size: 1.35rem;
+    }
+    .naomi-start-actions {
+        max-width: 100%;
+        grid-template-columns: 1fr;
+        border-radius: 24px;
+        padding: 0.5rem;
+    }
+}
+.stTextInput div[data-baseweb="input"],
+.stTextInput div[data-baseweb="input"] > div,
+.stTextInput div[data-baseweb="base-input"],
+.stTextInput div[data-baseweb="base-input"] > div {
+    background: rgba(255, 255, 255, 0.92) !important;
+    border-color: rgba(106, 140, 175, 0.16) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+}
+.stTextInput div[data-baseweb="input"] input,
+.stTextInput div[data-baseweb="base-input"] input,
+.stTextInput input {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    color: #33485d !important;
+    caret-color: #2f4964 !important;
+    box-shadow: none !important;
+}
+.stTextInput div[data-baseweb="input"] input:focus,
+.stTextInput div[data-baseweb="base-input"] input:focus,
+.stTextInput input:focus {
+    color: #24394f !important;
+    caret-color: #1f5f8f !important;
+    outline: none !important;
+}
+.stTextInput div[data-baseweb="input"]:focus-within,
+.stTextInput div[data-baseweb="base-input"]:focus-within {
+    background: rgba(255, 255, 255, 0.96) !important;
+    border-color: rgba(106, 140, 175, 0.30) !important;
+    box-shadow: 0 0 0 3px rgba(106, 140, 175, 0.08), 0 10px 26px rgba(106, 140, 175, 0.045) !important;
+}
+.stTextInput input::placeholder {
+    color: rgba(72, 91, 112, 0.44) !important;
+    opacity: 1 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1339,8 +1796,98 @@ with col_header_settings:
         else:
             st.caption(tr("NAOMI has not responded yet.", "まだNAOMIの返答はありません。"))
 
+if st.session_state.naomi_screen == "start":
+    current_lang = st.session_state.get("language", "JP")
+    hour_now = datetime.now().hour
+    if current_lang == "EN":
+        start_salutation = "Good morning" if 5 <= hour_now < 11 else "Hello" if 11 <= hour_now < 18 else "Good evening"
+        start_main = "How are you feeling today?"
+        start_sub = "There is no need to rush.<br>It is okay if what you want to say is not organized yet."
+        start_placeholder = "You can leave a short phrase here"
+        start_send = "Send quietly"
+        start_state = "Organize my state"
+        start_memo = "Create a care note"
+        start_home = "Home"
+    else:
+        start_salutation = "おはようございます" if 5 <= hour_now < 11 else "こんにちは" if 11 <= hour_now < 18 else "こんばんは"
+        start_main = "今日はどんな感じですか？"
+        start_sub = "急がなくて大丈夫です<br>話したいことがまとまっていなくても大丈夫です"
+        start_placeholder = "例：あなたの体調について教えてください"
+        start_send = "そっと送る"
+        start_state = "状態を整理する"
+        start_memo = "相談前メモを作る"
+        start_home = "ホームへ"
+
+    st.markdown(f"""
+    <section class="naomi-start-shell">
+        <div class="naomi-start-still-life" aria-hidden="true">
+            <div class="naomi-start-branch"></div>
+            <div class="naomi-start-vase"></div>
+            <div class="naomi-start-mug"></div>
+        </div>
+        <div class="naomi-start-copy">
+            <div class="naomi-start-symbol">🌙</div>
+            <div class="naomi-start-greeting">{start_salutation}</div>
+            <div class="naomi-start-main">{start_main}</div>
+            <div class="naomi-start-sub">{start_sub}</div>
+            <div class="naomi-start-divider"></div>
+        </div>
+    </section>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="naomi-start-form-anchor"></div>', unsafe_allow_html=True)
+    with st.form("start_free_chat_form", clear_on_submit=True):
+        start_user_text = st.text_input(
+            tr("Talk to NAOMI", "NAOMIに話しかける"),
+            placeholder=start_placeholder,
+            label_visibility="collapsed",
+        )
+        _, start_send_col, _ = st.columns([1, 1, 1])
+        with start_send_col:
+            submitted_start_chat = st.form_submit_button(start_send, use_container_width=True)
+
+    if submitted_start_chat and start_user_text.strip():
+        if hasattr(st.session_state.agent_core, "process_free_chat"):
+            result = st.session_state.agent_core.process_free_chat(start_user_text.strip(), active_profile())
+        else:
+            result = st.session_state.agent_core.process_input(start_user_text.strip(), active_profile())
+        st.session_state.last_result = (start_user_text.strip(), result)
+        st.session_state.proactive_question = None
+        st.rerun()
+
+    if st.session_state.last_result:
+        _, result = st.session_state.last_result
+        if result.text:
+            visible_phase_label = phase_label(result)
+            if visible_phase_label:
+                st.markdown(f"""
+                <div style="text-align:center; margin-top:1rem;">
+                    <span style="display:inline-block; background:rgba(106, 140, 175, 0.08); border:1px solid rgba(106, 140, 175, 0.16); color:#4f6f90; border-radius:999px; padding:0.35rem 0.75rem; font-size:0.85rem;">
+                        {visible_phase_label}
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+            result_text_display = display_response_text(result.text, result.scenario_id)
+            st.markdown(f"""
+            <div class="naomi-start-response">
+                <h5 style="margin:0 0 0.7rem 0; font-family:'Noto Serif JP', serif; color:#4f6f90; font-size:1.05rem; letter-spacing:0.05em;">NAOMI</h5>
+                <p style="font-size:1.02rem; line-height:1.85; margin:0;">{result_text_display}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div class="naomi-start-divider"></div>
+    <div class="naomi-start-actions">
+        <a class="naomi-start-action" href="?screen=state&mode=tired&lang={current_lang}" target="_self"><span>🌿</span>{start_state}</a>
+        <a class="naomi-start-action" href="?screen=state&mode=health&lang={current_lang}" target="_self"><span>📋</span>{start_memo}</a>
+        <a class="naomi-start-action" href="?screen=home&lang={current_lang}" target="_self"><span>⌂</span>{start_home}</a>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
 if st.session_state.naomi_screen == "home":
     greeting_text = home_greeting()
+    current_lang = st.session_state.get("language", "JP")
     chat_bg = "rgba(255, 255, 255, 0.62)" if theme_mode == "light" else "rgba(13, 20, 35, 0.45)"
     chat_border = "rgba(106, 140, 175, 0.14)" if theme_mode == "light" else "rgba(197, 168, 128, 0.14)"
     chat_title = "#4f6f90" if theme_mode == "light" else "#c5a880"
@@ -1353,7 +1900,43 @@ if st.session_state.naomi_screen == "home":
         "短い言葉で大丈夫です。NAOMIはまず受け止めて、状況を知るために必要なことだけをそっと確認します。"
     )
     st.markdown(f"""
-    <div style="background:{chat_bg}; border:1px solid {chat_border}; border-radius:22px; padding:1.25rem 1.35rem; margin:1rem auto 1rem auto; max-width:860px; box-shadow:0 18px 48px rgba(106, 140, 175, 0.07);">
+    <section class="naomi-home-shell">
+        <div class="naomi-home-still-life" aria-hidden="true">
+            <div class="naomi-home-branch"></div>
+            <div class="naomi-home-vase"></div>
+            <div class="naomi-home-mug"></div>
+        </div>
+        <div class="naomi-home-copy">
+            <div class="naomi-home-symbol">🌙</div>
+            <h2 class="naomi-home-title">{t("welcome_title")}</h2>
+            <p class="naomi-home-sub">
+                {greeting_text}<br>
+                <span style="font-size:0.92em; opacity:0.82;">{t("welcome_subtitle")}</span>
+            </p>
+        </div>
+        <div class="naomi-home-actions">
+            <a class="naomi-home-action-card" href="?screen=state&mode=tired&lang={current_lang}" target="_self">
+                <div class="naomi-home-action-icon">🌿</div>
+                <div class="naomi-home-action-title">{t("action_1_title")}</div>
+                <div class="naomi-home-action-sub">{t("action_1_sub")}</div>
+            </a>
+            <a class="naomi-home-action-card" href="?screen=state&mode=mental&lang={current_lang}" target="_self">
+                <div class="naomi-home-action-icon">💬</div>
+                <div class="naomi-home-action-title">{t("action_2_title")}</div>
+                <div class="naomi-home-action-sub">{t("action_2_sub")}</div>
+            </a>
+            <a class="naomi-home-action-card" href="?screen=state&mode=health&lang={current_lang}" target="_self">
+                <div class="naomi-home-action-icon">📋</div>
+                <div class="naomi-home-action-title">{t("action_3_title")}</div>
+                <div class="naomi-home-action-sub">{t("action_3_sub")}</div>
+            </a>
+        </div>
+    </section>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f'<div class="naomi-home-note">{t("home_note")}</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="naomi-home-chat-message" style="background:{chat_bg}; border:1px solid {chat_border}; border-radius:22px; padding:1.25rem 1.35rem; margin:1rem auto 1rem auto; max-width:860px; box-shadow:0 18px 48px rgba(106, 140, 175, 0.07);">
         <div style="font-family:'Noto Serif JP', serif; color:{chat_title}; font-size:1.08rem; margin-bottom:0.35rem; letter-spacing:0.04em;">
             {greeting_text}
         </div>
@@ -1363,13 +1946,16 @@ if st.session_state.naomi_screen == "home":
         </div>
     </div>
     """, unsafe_allow_html=True)
+    st.markdown('<div class="naomi-home-chat-form-anchor"></div>', unsafe_allow_html=True)
     with st.form("home_free_chat_form", clear_on_submit=True):
         home_user_text = st.text_input(
             tr("Talk to NAOMI", "NAOMIに話しかける"),
             placeholder=tr("Example: I have been tired lately", "例：最近疲れていて"),
             label_visibility="collapsed",
         )
-        submitted_home_chat = st.form_submit_button(tr("Send quietly", "そっと送る"), use_container_width=False)
+        _, home_send_col, _ = st.columns([1, 1, 1])
+        with home_send_col:
+            submitted_home_chat = st.form_submit_button(tr("Send quietly", "そっと送る"), use_container_width=True)
     if submitted_home_chat and home_user_text.strip():
         if hasattr(st.session_state.agent_core, "process_free_chat"):
             result = st.session_state.agent_core.process_free_chat(home_user_text.strip(), active_profile())
@@ -1396,54 +1982,6 @@ if st.session_state.naomi_screen == "home":
                 <p style="font-size:1.02rem; line-height:1.85; margin:0;">{result_text_display}</p>
             </div>
             """, unsafe_allow_html=True)
-    st.markdown(f"""
-    <section class="naomi-home-shell">
-        <div class="naomi-home-still-life" aria-hidden="true">
-            <div class="naomi-home-branch"></div>
-            <div class="naomi-home-vase"></div>
-            <div class="naomi-home-mug"></div>
-        </div>
-        <div class="naomi-home-copy">
-            <div class="naomi-home-symbol">🌙</div>
-            <h2 class="naomi-home-title">{t("welcome_title")}</h2>
-            <p class="naomi-home-sub">
-                {greeting_text}<br>
-                <span style="font-size:0.92em; opacity:0.82;">{t("welcome_subtitle")}</span>
-            </p>
-        </div>
-        <div class="naomi-home-actions">
-            <div class="naomi-home-action-card">
-                <div class="naomi-home-action-icon">🌿</div>
-                <div class="naomi-home-action-title">{t("action_1_title")}</div>
-                <div class="naomi-home-action-sub">{t("action_1_sub")}</div>
-            </div>
-            <div class="naomi-home-action-card">
-                <div class="naomi-home-action-icon">💬</div>
-                <div class="naomi-home-action-title">{t("action_2_title")}</div>
-                <div class="naomi-home-action-sub">{t("action_2_sub")}</div>
-            </div>
-            <div class="naomi-home-action-card">
-                <div class="naomi-home-action-icon">📋</div>
-                <div class="naomi-home-action-title">{t("action_3_title")}</div>
-                <div class="naomi-home-action-sub">{t("action_3_sub")}</div>
-            </div>
-        </div>
-    </section>
-    """, unsafe_allow_html=True)
-
-
-    st.markdown('<div class="naomi-home-actions-buttons">', unsafe_allow_html=True)
-    home_col1, home_col2, home_col3 = st.columns(3)
-    current_lang = st.session_state.get("language", "JP")
-    with home_col1:
-        st.markdown(f'<a class="naomi-home-link-button" href="?screen=state&mode=tired&lang={current_lang}#naomi-menu-top" target="_self">{t("action_1_title")}</a>', unsafe_allow_html=True)
-    with home_col2:
-        st.markdown(f'<a class="naomi-home-link-button" href="?screen=state&mode=mental&lang={current_lang}#naomi-menu-top" target="_self">{t("action_2_title")}</a>', unsafe_allow_html=True)
-    with home_col3:
-        st.markdown(f'<a class="naomi-home-link-button" href="?screen=state&mode=health&lang={current_lang}#naomi-menu-top" target="_self">{t("action_3_title")}</a>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown(f'<div class="naomi-home-note">{t("home_note")}</div>', unsafe_allow_html=True)
     st.stop()
 
 # ── 🌿 NAOMIを使う方への静かな案内 ──
@@ -1629,13 +2167,16 @@ st.markdown(f"""
     <div style="color:gray; font-size:0.84rem;">ボタンだけでも使えます。無理に書かなくても大丈夫です。</div>
 </div>
 """, unsafe_allow_html=True)
+st.markdown('<div class="naomi-state-chat-form-anchor"></div>', unsafe_allow_html=True)
 with st.form("state_free_text_form", clear_on_submit=True):
     state_free_text = st.text_input(
         "任意の入力",
         placeholder="例：最近仕事が忙しくて疲れています",
         label_visibility="collapsed",
     )
-    submitted_free_text = st.form_submit_button("そっと送る", use_container_width=False)
+    _, state_send_col, _ = st.columns([1, 1, 1])
+    with state_send_col:
+        submitted_free_text = st.form_submit_button("そっと送る", use_container_width=True)
 if submitted_free_text and state_free_text.strip():
     result = st.session_state.agent_core.process_input(state_free_text.strip(), active_profile())
     st.session_state.last_result = (state_free_text.strip(), result)
@@ -2512,7 +3053,9 @@ if show_bottom_chat:
     </div>
     """, unsafe_allow_html=True)
 
-user_input = st.chat_input(tr("Example: I have been busy with work and feel tired", "例：最近仕事が忙しくて疲れています"))
+user_input = st.chat_input(
+    tr("Example: I have been busy with work and feel tired", "例：最近仕事が忙しくて疲れています")
+) if show_bottom_chat else None
 
 if user_input:
     try:
