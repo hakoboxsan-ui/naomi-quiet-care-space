@@ -2,10 +2,11 @@ import streamlit as st
 import sys
 import os
 import importlib
+from datetime import datetime
 from dataclasses import asdict
 from textwrap import dedent
 
-# プロジェクトルートをPYTHONPATHに追加
+# 繝励Ο繧ｸ繧ｧ繧ｯ繝医Ν繝ｼ繝医ｒPYTHONPATH縺ｫ霑ｽ蜉
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import agent.mode_selector as mode_selector_module
@@ -16,28 +17,28 @@ from agent.core import NaomiAgentCore
 from agent.personal_baseline import load_profiles, get_profile, update_profile
 from agent.proactive_care import generate_checkin_question
 
-# ── 一般的なAIの固定返答（比較デモ用） ──
+# 笏笏 荳闊ｬ逧・↑AI縺ｮ蝗ｺ螳夊ｿ皮ｭ費ｼ域ｯ碑ｼ・ョ繝｢逕ｨ・・笏笏
 GENERIC_AI_RESPONSES = {
-    "tired": "大変お疲れ様ですね。疲労回復のためには以下の3点をお勧めします：1. 十分な睡眠の確保、2. 軽いストレッチ、3. 明日のタスクの優先順位付け。まずはこれらを実践してみてください。",
-    "anxiety": "不安を感じているのですね。不安を解消するための科学的な方法は深呼吸とマインドフルネス瞑想です。まずは5分間、呼吸にのみ集中してみることから始めましょう。",
-    "lonely": "孤独感を感じているとのこと、コミュニティへの参加や、友人への連絡をお勧めします。誰かと話すことで孤独感は軽減されることが統計的に証明されています。",
-    "exhausted_advice": "限界を感じつつも解決策を求めているのですね。現状を打破するためのステップは以下の通りです：1. タスクの優先順位付け、2. 不要な仕事の切り捨て、3. 周囲への相談。すぐに実行に移しましょう。",
-    "overthinking_sleep": "睡眠不足は健康に悪影響を及ぼします。寝る前にスマホを控え、深呼吸し、頭の中のタスクを紙に書き出してリセットしましょう。",
-    "always_tense": "緊張状態が続いているのですね。自律神経を整えるために、温かいお茶を飲み、軽いストレッチやヨガを行うことをお勧めします。",
-    "decision_fatigue": "決断疲れ（Decision Fatigue）の症状です。重要な決断は午前中に行い、服装や食事など日常の選択をルーティン化して減らしましょう。",
-    "cannot_rest": "完璧主義の傾向が見られます。休むことも重要なタスクであると認識し、スケジュールに『何もしない時間』を強制的に組み込んでください。",
-    "silent_loneliness": "そのように感じる時は、趣味のコミュニティに参加したり、新しい習い事を始めることで、新しい人間関係を構築してみましょう。",
-    "default": "ご相談ありがとうございます。あなたの状況を分析しました。最善の解決策は以下の通りです。まずこれを行い、次にこれを行ってください..."
+    "tired": "かなり疲れているようですね。休息のために、睡眠、軽い運動、明日のタスク整理をおすすめします。",
+    "anxiety": "不安を感じているようですね。深呼吸をして、原因を書き出してみましょう。",
+    "lonely": "孤独感があるなら、誰かに連絡したり、コミュニティに参加することが役立つかもしれません。",
+    "exhausted_advice": "限界を感じているなら、まずタスクを整理して、不要なものを減らしましょう。",
+    "overthinking_sleep": "眠れないときは、スマートフォンを置き、考えごとを紙に書き出しましょう。",
+    "always_tense": "緊張が続いているなら、温かい飲み物や軽いストレッチを試してみましょう。",
+    "decision_fatigue": "決断疲れには、重要な判断を午前中に回し、日常の選択を減らすことが有効です。",
+    "cannot_rest": "休むことも大切な予定として、何もしない時間を確保しましょう。",
+    "silent_loneliness": "理由のはっきりしない寂しさには、新しい習慣や人との接点が助けになる場合があります。",
+    "default": "状況を分析し、優先順位を決め、次の行動を考えてみましょう。"
 }
 
-# ── Page Config ──
+# 笏笏 Page Config 笏笏
 st.set_page_config(
     page_title="NAOMI - 静かな場所",
     page_icon="🌙",
     layout="wide"
 )
 
-# ── Session State ──
+# 笏笏 Session State 笏笏
 if "agent_core" not in st.session_state:
     st.session_state.agent_core = NaomiAgentCore()
 if "last_result" not in st.session_state:
@@ -78,10 +79,10 @@ elif query_screen == "state":
             "mental": "🧠 考えすぎている",
             "health": "🩺 今の健康状態を一緒に整理しましょう",
         }
-        st.session_state.naomi_active_mode = ""
+        st.session_state.naomi_active_mode = mode_map.get(query_mode, "")
     st.session_state.naomi_screen = "state"
 
-# ── 多言語テキスト辞書 (最小英語モード) ──
+# 笏笏 螟夊ｨ隱槭ユ繧ｭ繧ｹ繝郁ｾ樊嶌 (譛蟆剰恭隱槭Δ繝ｼ繝・ 笏笏
 TEXT = {
     "JP": {
         "welcome_title": "おかえりなさい。<br>ここは、静かな場所です。",
@@ -101,17 +102,17 @@ TEXT = {
         "why_naomi_long": "うまく話せない日や、考える力が残っていない日でも大丈夫です。NAOMIは、あなたが選んだ状態に合わせて、言葉を少なく、静かに受け止めます。<br>※医療診断を行うものではありません。今の状態を伝えやすくするための静かな補助です。",
         "badge_1": "話さなくても大丈夫",
         "badge_2": "クリックだけでOK",
-        "badge_3": "理屈を急がない",
-        "guide_title": "💡 迷ったときの使い方",
+        "badge_3": "整理を急がない",
+        "guide_title": "使い方",
         "guide_desc": "気になるカードを押すだけで大丈夫です。NAOMIが言葉の量や進み方を控えめにしながら、今の感じをそっと受け止めます。",
-        "guide_step_title": "👉 迷ったときの目安：",
-        "guide_step_1": "疲れている時は、まず 「🌙 少し疲れている」 を選んでください。",
-        "guide_step_2": "考えが止まらない時は 「🧠 考えすぎている」 が近いかもしれません。",
-        "guide_step_3": "体調や症状を伝えたい時は、「🩺 今の健康状態を一緒に整理しましょう」 を選んでください。",
+        "guide_step_title": "迷ったときの目安:",
+        "guide_step_1": "疲れている時は、『少し疲れている』を選んでください。",
+        "guide_step_2": "考えが止まらない時は、『不安』が近いかもしれません。",
+        "guide_step_3": "体調や症状を伝えたい時は、『今の健康状態を一緒に整理しましょう』を選んでください。",
         "today_feel": "今日は、どんな感じですか？",
         "today_feel_sub": "無理に話さなくても大丈夫です。",
-        "disclaimer_title": "🛡️ 安全に関するご案内と免責事項",
-        "disclaimer_text": "NAOMIは医療診断を行うサービスではなく、病名の特定や治療指示といった<b>医療診断行為は一切行いません</b>。<br>また、個人の心身の状態を完全に<b>断定するものでもありません</b>。<br>NAOMIは、ご本人や支援者が現在の状態を見つめ、必要な相談や専門機関へつなぎやすくするための静かな補助を目的としています。<br>強い精神的苦痛や緊急を要する心身の不調がある場合は、直ちに専門の医療機関や公的な相談窓口へ直接ご相談ください。",
+        "disclaimer_title": "安全に関する案内と免責事項",
+        "disclaimer_text": "NAOMIは医療診断、治療指示、臨床判断を行うサービスではありません。<br>心身の状態を断定するものでもありません。<br>強い苦痛や緊急性がある場合は、身近な人、医療機関、または緊急窓口へ相談してください。",
         "card_1_title": "🌙 少し疲れている",
         "card_1_desc": "言葉にする余裕がない時も、<br>選ぶだけで始められます。",
         "card_2_title": "🧠 不安",
@@ -120,7 +121,7 @@ TEXT = {
         "card_3_desc": "音声なし・文字中心など、<br>受け取り方を楽にします。",
         "card_4_title": "🌿 整理したい",
         "card_4_desc": "体調や気持ちを、<br>相談前メモに整えます。",
-        "btn_selected": "✓ 選択中",
+        "btn_selected": "選択中",
         "btn_select": "ここを選ぶ"
     },
     "EN": {
@@ -138,20 +139,20 @@ TEXT = {
         "why_naomi_title": "🌿 About This Place",
         "why_naomi_subtitle": "A safe, quiet space when you are exhausted",
         "why_naomi_desc": "No rush for answers. Easing conversation pressure to fit your state.",
-        "why_naomi_long": "It is perfectly okay if you cannot speak well or run out of mental energy today. NAOMI will reduce response length and listen gently without forcing logic.<br>Not a medical diagnosis. A calm assistant to help communicate your current state.",
+        "why_naomi_long": "It is okay if you cannot speak well today. NAOMI reduces response length and listens without forcing logic.<br>Not a medical diagnosis. A calm assistant to help communicate your current state.",
         "badge_1": "No talking required",
         "badge_2": "Click only is OK",
         "badge_3": "No logic forced",
-        "guide_title": "💡 How to Use",
+        "guide_title": "How to Use",
         "guide_desc": "Just click any card that matches your feelings today. NAOMI will adapt its response length and listen gently.",
-        "guide_step_title": "👉 Quick Guideline:",
-        "guide_step_1": "If you are tired, try selecting \"🌙 Slightly tired\" first.",
-        "guide_step_2": "If your mind won't stop racing, \"🧠 Anxious & restless\" might fit best.",
-        "guide_step_3": "To share physical symptoms, choose \"🩺 Let's gently organize your symptoms\".",
+        "guide_step_title": "Quick guideline:",
+        "guide_step_1": "If you are tired, try selecting 'Slightly tired' first.",
+        "guide_step_2": "If your mind will not stop racing, 'Anxious & restless' may fit best.",
+        "guide_step_3": "To share physical symptoms, choose 'Let's organize'.",
         "today_feel": "How are you feeling today?",
         "today_feel_sub": "You do not have to push yourself to speak.",
-        "disclaimer_title": "🛡️ Safety Guidelines & Medical Disclaimer",
-        "disclaimer_text": "NAOMI does not provide medical diagnosis, treatment instructions, or clinical assessment.<br>It does not definitively determine your physical or mental health status.<br>NAOMI is designed as a calm assistant to help you observe your state and communicate with caregivers or professionals.<br>If you are experiencing severe distress or a life-threatening emergency, please contact local emergency services immediately.",
+        "disclaimer_title": "Safety Guidelines & Medical Disclaimer",
+        "disclaimer_text": "NAOMI does not provide medical diagnosis, treatment instructions, or clinical assessment.<br>If you are experiencing severe distress or a life-threatening emergency, please contact local emergency services immediately.",
         "card_1_title": "🌙 Slightly tired",
         "card_1_desc": "Start just by clicking,<br>even when words are hard to find.",
         "card_2_title": "🧠 Anxious & restless",
@@ -160,11 +161,10 @@ TEXT = {
         "card_3_desc": "Adjust font size and volume<br>for a stress-free experience.",
         "card_4_title": "🌿 Let's organize",
         "card_4_desc": "Prepare structured notes<br>for your next consultation.",
-        "btn_selected": "✓ Selected",
+        "btn_selected": "Selected",
         "btn_select": "Select this"
     }
 }
-
 def t(key):
     lang = st.session_state.get("language", "JP")
     if key in TEXT[lang]:
@@ -175,6 +175,29 @@ def t(key):
 
 def tr(en, jp):
     return en if st.session_state.get("language", "JP") == "EN" else jp
+
+def home_greeting(hour=None, lang=None):
+    hour = datetime.now().hour if hour is None else hour
+    lang = st.session_state.get("language", "JP") if lang is None else lang
+    if lang == "EN":
+        if 5 <= hour < 11:
+            return "Good morning. How are you feeling today?"
+        if 11 <= hour < 16:
+            return "Hello. Have you been able to take a short break?"
+        if 16 <= hour < 19:
+            return "Good evening. You have made it through another part of the day."
+        if 19 <= hour < 24:
+            return "Good evening. Thank you for getting through today."
+        return "You are here late. Thank you for stopping by."
+    if 5 <= hour < 11:
+        return "おはようございます。今日の調子はいかがですか？"
+    if 11 <= hour < 16:
+        return "こんにちは。少し休憩は取れていますか？"
+    if 16 <= hour < 19:
+        return "夕方ですね。ここで少しだけ、息を置いていけます。"
+    if 19 <= hour < 24:
+        return "こんばんは。一日お疲れさまでした。"
+    return "遅い時間までお疲れさまです。"
 
 def active_profile():
     profile = dict(get_profile(st.session_state.current_user_id))
@@ -196,25 +219,7 @@ EN_RESPONSE_BY_SCENARIO = {
     "health_symptoms": "You want to organize your physical condition so it is easier to explain.\nEven listing symptoms, when they started, and their impact on daily life can make it easier to share with a consultant.",
 }
 
-COMMON_RESPONSE_EN = {
-    "とてもお辛いですね。今は無理に言葉にしなくて大丈夫です。返事も、できる時だけで大丈夫です。": "That sounds very painful. You do not have to force words right now. Reply only when you can.",
-    "今は、何も整えようとしなくて大丈夫です。ここに置いておくだけで大丈夫です。": "You do not have to organize anything right now. It is enough to leave it here.",
-    "しんどい中で教えてくださってありがとうございます。返事は急がなくて大丈夫です。": "Thank you for telling me while things feel hard. There is no need to hurry your reply.",
-    "かなりお辛い状態なのですね。今は、言葉を少なくして、静かに受け止めます。": "This sounds very hard. I will keep my words few and receive it quietly.",
-    "たくさん抱えてきたのですね。まずは、今の重さをここに置いて大丈夫です。": "You have been carrying a lot. For now, it is okay to place that weight here.",
-    "本当にがんばってきたのですね。急がなくて大丈夫です。少しずつでいいです。": "You have really been trying hard. There is no need to rush. Little by little is enough.",
-    "どんな気持ちも、そのまま受け止めます。無理に説明しなくて大丈夫です。": "Whatever you feel, I will receive it as it is. You do not have to explain it forcefully.",
-    "少しだけ、一緒に見ていきましょう。今いちばん重いものを、ひとつだけ置けそうですか。": "Let's look at this together, just a little. Could you place just the heaviest thing here?",
-    "焦らなくて大丈夫です。言葉になるところから、少しずつで構いません。": "No need to rush. Start only where words are possible, little by little.",
-    "頭の中がいっぱいなのですね。まずはひとつだけ、ゆっくりほどいていきましょう。": "Your mind feels full. Let's gently untangle just one thing first.",
-    "夜は、考えが大きく感じられることがあります。今は返事をしなくても大丈夫です。": "At night, thoughts can feel larger. You do not have to reply right now.",
-    "今日が少しでも静かに終わりますように。言葉は少なくて大丈夫です。": "I hope today can end a little more quietly. Few words are enough.",
-    "眠れない時も、焦らなくて大丈夫です。ただ静かにここにいてください。": "Even when you cannot sleep, you do not have to rush. Just stay here quietly.",
-    "今日もここまで来たのですね。まずは、そのままで大丈夫です。": "You made it this far today. For now, you are okay as you are.",
-    "焦らなくて大丈夫です。あなたのペースを、ここではそのまま大切にします。": "No need to rush. Your pace is respected here exactly as it is.",
-    "そうなんですね。話したいところだけ、ぽつぽつで大丈夫です。": "I see. It is okay to share only the parts you want to, piece by piece.",
-}
-
+COMMON_RESPONSE_EN = {}
 GENERIC_AI_RESPONSES_EN = {
     "lonely": "When someone feels lonely, common advice is to join a community or contact friends. It is statistically shown that talking with someone may reduce loneliness.",
     "default": "Thank you for sharing. A typical solution-focused response might suggest analyzing the situation, prioritizing tasks, and taking immediate next steps.",
@@ -228,45 +233,7 @@ def display_response_text(text, scenario_id=None):
     return COMMON_RESPONSE_EN.get(text, text)
 
 def display_note_text(text):
-    if st.session_state.get("language", "JP") != "EN" or not text:
-        return text
-    replacements = {
-        "■ 状態整理メモ (Staff Note)": "■ Care handoff note (Staff Note)",
-        "・現在の主訴": "・Current concern",
-        "明日のことを考えると不安で落ち着かない": "Thinking about tomorrow makes me anxious and unsettled",
-        "どうしたらいいか教えてほしいけど、正直もう疲れてる": "I want advice on what to do, but honestly I am already exhausted",
-        "最近ちょっと疲れてて…": "I have been feeling a little tired lately...",
-        "なんか一人でいる感じがして寂しい": "I feel like I am alone somehow, and it feels lonely",
-        "明日も早いのに、考えごとが止まらなくて眠れない": "I have to wake up early tomorrow, but my thoughts will not stop and I cannot sleep",
-        "休んでるはずなのに、ずっと気を張っている感じがする": "Even though I should be resting, I still feel tense all the time",
-        "小さいことを決めるのも疲れてきた。何から考えればいいかわからない": "Even small decisions feel tiring. I do not know where to start",
-        "疲れてるのに、休んでいい気がしない": "I am tired, but I do not feel like I am allowed to rest",
-        "別に大きな問題があるわけじゃないけど、なんとなく一人で抱えてる感じがする": "There is no big problem, but I somehow feel like I am carrying it alone",
-        "・不安/疲労の傾向": "・Estimated anxiety/fatigue trend",
-        "・睡眠状態": "・Sleep condition",
-        "・会話圧": "・Conversation pressure",
-        "・提案": "・Suggested approach",
-        "特筆事項なし": "No specific issues detected",
-        "少しお疲れ、あるいはご負担を感じている可能性": "May be experiencing fatigue or emotional distress",
-        "落ち着いている様子": "Seems calm and stable",
-        "いつもより少し活気が低下している様子が見受けられます": "Energy appears slightly lower than usual",
-        "いつもより少し活動的、あるいは気が張っている様子があります": "May be slightly more active or tense than usual",
-        "いつもに比べて、言葉少なめでいらっしゃるようです": "Using fewer words than usual",
-        "いつもよりご自身のお気持ちを多く話されている様子があります": "Sharing more feelings than usual",
-        "普段はよく休まれているようですが、本日は少しお疲れ・眠気がある様子です": "Usually rests well, but today may be tired or sleepy",
-        "継続して睡眠不足や眠気の傾向が見受けられます": "Ongoing lack of sleep or sleepiness may be present",
-        "少しご負担や気疲れが重なっている様子がうかがえます": "Some emotional burden or fatigue may be building up",
-        "低圧応対推奨": "Low-pressure response recommended",
-        "極めて低い（推奨）": "Very low (recommended)",
-        "低い（推奨）": "Low (recommended)",
-        "標準": "Standard",
-        "高い": "High",
-        "※このメモはAIとの対話からの推定であり、医療的な判断や断定を行うものではありません。": "*This note is an estimate from the conversation and is not a medical judgment or diagnosis.",
-    }
-    out = text
-    for jp, en in replacements.items():
-        out = out.replace(jp, en)
-    return out
+    return text
 
 def phase_label(result):
     phase = (getattr(result, "asurada_state", {}) or {}).get("phase")
@@ -298,7 +265,7 @@ def keep_menu_top_once():
     st.session_state.last_result = None
     st.session_state.proactive_question = None
 
-# --- アクセシビリティキー同期 (Step 3: 重複回避 & 相互同期) ---
+# --- 繧｢繧ｯ繧ｻ繧ｷ繝薙Μ繝・ぅ繧ｭ繝ｼ蜷梧悄 (Step 3: 驥崎､・屓驕ｿ & 逶ｸ莠貞酔譛・ ---
 if "large_font" not in st.session_state:
     st.session_state.large_font = False
 if "acc_large_font" not in st.session_state:
@@ -314,11 +281,11 @@ for k in ["acc_button_only", "acc_short_response", "acc_no_audio", "acc_no_talk"
     if k not in st.session_state:
         st.session_state[k] = False
 
-# ── デザインシステム CSS 注入 (Step 1: Calm Light / Quiet Night) ──
+# 笏笏 繝・じ繧､繝ｳ繧ｷ繧ｹ繝・Β CSS 豕ｨ蜈･ (Step 1: Calm Light / Quiet Night) 笏笏
 theme_mode = st.session_state.get("theme_mode", "light")
 is_large = st.session_state.get("large_font", False)
 
-# Google Fonts インポート
+# Google Fonts 繧､繝ｳ繝昴・繝・
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Noto+Serif+JP:wght@300;400;600&family=Inter:wght@300;400;500&display=swap');
@@ -334,7 +301,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 共通フォントサイズ設定
+# 蜈ｱ騾壹ヵ繧ｩ繝ｳ繝医し繧､繧ｺ險ｭ螳・
 base_font_size = "1.35rem" if is_large else "0.95rem"
 h1_font_size = "2.8rem" if is_large else "1.9rem"
 h2_font_size = "2.2rem" if is_large else "1.5rem"
@@ -345,13 +312,13 @@ if theme_mode == "light":
     # Calm Light Mode
     st.markdown(f"""
     <style>
-    /* Streamlitデフォルトヘッダー・フッター非表示 (SaaS感の完全排除) */
+    /* Streamlit繝・ヵ繧ｩ繝ｫ繝医・繝・ム繝ｼ繝ｻ繝輔ャ繧ｿ繝ｼ髱櫁｡ｨ遉ｺ (SaaS諢溘・螳悟・謗帝勁) */
     header[data-testid="stHeader"], footer {{
         visibility: hidden !important;
         height: 0px !important;
     }}
     
-    /* アプリ全体背景 & フォント */
+    /* 繧｢繝励Μ蜈ｨ菴楢レ譎ｯ & 繝輔か繝ｳ繝・*/
     .stApp, [data-testid="stAppViewContainer"] {{
         background: radial-gradient(circle at top, #fcfdfe 0%, #f5f8fc 50%, #ebeeec 100%) !important;
         color: #2c3e50 !important;
@@ -372,14 +339,14 @@ if theme_mode == "light":
     .stApp h3 {{ font-size: {h3_font_size} !important; }}
     .stApp h4 {{ font-size: {h4_font_size} !important; }}
     
-    /* コンテナの余白調整（縦長の静かな余白空間） */
+    /* 繧ｳ繝ｳ繝・リ縺ｮ菴咏區隱ｿ謨ｴ・育ｸｦ髟ｷ縺ｮ髱吶°縺ｪ菴咏區遨ｺ髢難ｼ・*/
     .block-container {{
         padding-top: 2.0rem !important;
         padding-bottom: 5rem !important;
         max-width: 950px !important;
     }}
     
-    /* 横線の非表示・透過化 */
+    /* 讓ｪ邱壹・髱櫁｡ｨ遉ｺ繝ｻ騾城℃蛹・*/
     hr {{
         border: none !important;
         height: 1px !important;
@@ -387,7 +354,7 @@ if theme_mode == "light":
         margin: 2.5rem 0 !important;
     }}
     
-    /* ガラスカード調 (stAlert, widgets) - ボーダー極細・シャドウ超ソフト化 */
+    /* 繧ｬ繝ｩ繧ｹ繧ｫ繝ｼ繝芽ｪｿ (stAlert, widgets) - 繝懊・繝繝ｼ讌ｵ邏ｰ繝ｻ繧ｷ繝｣繝峨え雜・た繝輔ヨ蛹・*/
     div.stAlert, [data-testid="stExpander"] {{
         background-color: rgba(255, 255, 255, 0.6) !important;
         color: #2c3e50 !important;
@@ -400,7 +367,7 @@ if theme_mode == "light":
         margin-bottom: 1.2rem !important;
     }}
     
-    /* ボタンのQuiet Luxury化 */
+    /* 繝懊ち繝ｳ縺ｮQuiet Luxury蛹・*/
     .stButton > button {{
         background-color: rgba(255, 255, 255, 0.5) !important;
         color: #2c3e50 !important;
@@ -431,7 +398,35 @@ if theme_mode == "light":
         border-color: rgba(106, 140, 175, 0.5) !important;
         box-shadow: 0 0 0 3px rgba(106, 140, 175, 0.15) !important;
     }}
-    /* 選択済み (primary) ボタンの上質なQuiet Luxury化 (沈む背景・輪郭強調・身体感覚グロー) */
+    div[data-testid="stForm"] button[kind="secondaryFormSubmit"],
+    div[data-testid="stForm"] button[data-testid="baseButton-secondaryFormSubmit"] {{
+        background-color: #EAF1F8 !important;
+        color: #5E6F82 !important;
+        border: 1px solid #D7E2EC !important;
+        border-radius: 18px !important;
+        font-weight: 500 !important;
+        box-shadow: none !important;
+    }}
+    div[data-testid="stForm"] button[kind="secondaryFormSubmit"]:hover,
+    div[data-testid="stForm"] button[data-testid="baseButton-secondaryFormSubmit"]:hover {{
+        background-color: #DDEAF5 !important;
+        color: #5E6F82 !important;
+        border-color: #C7D7E6 !important;
+        box-shadow: 0 6px 18px rgba(106, 140, 175, 0.08) !important;
+        transform: translateY(-1px);
+    }}
+    div[data-testid="stForm"] div[data-baseweb="input"],
+    div[data-testid="stForm"] .stTextInput input {{
+        border-color: #D7E2EC !important;
+        box-shadow: none !important;
+    }}
+    div[data-testid="stForm"] div[data-baseweb="input"]:focus-within,
+    div[data-testid="stForm"] .stTextInput input:focus {{
+        border-color: #BFD0E2 !important;
+        box-shadow: 0 0 0 3px rgba(191, 208, 226, 0.24) !important;
+        outline: none !important;
+    }}
+    /* 驕ｸ謚樊ｸ医∩ (primary) 繝懊ち繝ｳ縺ｮ荳願ｳｪ縺ｪQuiet Luxury蛹・(豐医・閭梧勹繝ｻ霈ｪ驛ｭ蠑ｷ隱ｿ繝ｻ霄ｫ菴捺─隕壹げ繝ｭ繝ｼ) */
     .stButton > button[kind="primary"], .stButton > button[data-testid="baseButton-primary"] {{
         background-color: rgba(106, 140, 175, 0.12) !important;
         color: #0f171e !important;
@@ -445,7 +440,7 @@ if theme_mode == "light":
         color: #000000 !important;
     }}
     
-    /* 入力エリア */
+    /* 蜈･蜉帙お繝ｪ繧｢ */
     .stChatInput textarea, .stTextArea textarea, .stTextInput input {{
         background-color: rgba(255, 255, 255, 0.75) !important;
         color: #2c3e50 !important;
@@ -458,7 +453,7 @@ if theme_mode == "light":
         opacity: 1 !important;
     }}
     
-    /* タブのスタイリング（SaaS管理画面感を極限まで消去） */
+    /* 繧ｿ繝悶・繧ｹ繧ｿ繧､繝ｪ繝ｳ繧ｰ・・aaS邂｡逅・判髱｢諢溘ｒ讌ｵ髯舌∪縺ｧ豸亥悉・・*/
     div[data-testid="stTabBar"] {{
         background: transparent !important;
         border: none !important;
@@ -481,7 +476,7 @@ if theme_mode == "light":
         font-weight: 500 !important;
     }}
     
-    /* 静かな選択カードの Calm Light スタイル */
+    /* 髱吶°縺ｪ驕ｸ謚槭き繝ｼ繝峨・ Calm Light 繧ｹ繧ｿ繧､繝ｫ */
     div[class^="status-btn-"] + div div.stButton > button {{
         min-height: 140px !important;
         height: auto !important;
@@ -506,7 +501,7 @@ if theme_mode == "light":
         transform: translateY(-1px);
     }}
     
-    /* Selectbox (Theme Selector) のSaaS感排除 */
+    /* Selectbox (Theme Selector) 縺ｮSaaS諢滓賜髯､ */
     div[data-testid="stSelectbox"] > div {{
         background-color: transparent !important;
         border: none !important;
@@ -518,7 +513,7 @@ if theme_mode == "light":
         box-shadow: 0 2px 10px rgba(0,0,0,0.01) !important;
     }}
     
-    /* Accessibility Mode コンテナ */
+    /* Accessibility Mode 繧ｳ繝ｳ繝・リ */
     div.accessibility-container {{
         background: rgba(255, 255, 255, 0.4) !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
@@ -530,7 +525,7 @@ if theme_mode == "light":
         -webkit-backdrop-filter: blur(16px) !important;
     }}
     
-    /* 絵文字の半透過ノイズ低減 */
+    /* 邨ｵ譁・ｭ励・蜊企城℃繝弱う繧ｺ菴取ｸ・*/
     .emoji-dim {{
         opacity: 0.6 !important;
         display: inline-block;
@@ -541,7 +536,7 @@ if theme_mode == "light":
         opacity: 1.0 !important;
     }}
     
-    /* スマホ幅での余白・崩れ防止レスポンシブクエリ (Night) */
+    /* 繧ｹ繝槭・蟷・〒縺ｮ菴咏區繝ｻ蟠ｩ繧碁亟豁｢繝ｬ繧ｹ繝昴Φ繧ｷ繝悶け繧ｨ繝ｪ (Night) */
     @media (max-width: 640px) {{
         .block-container {{
             padding-top: 1.0rem !important;
@@ -553,13 +548,13 @@ if theme_mode == "light":
             font-size: 0.85rem !important;
             white-space: normal !important;
         }}
-        /* モバイル表示時の文字サイズと余白調整 */
+        /* 繝｢繝舌う繝ｫ陦ｨ遉ｺ譎ゅ・譁・ｭ励し繧､繧ｺ縺ｨ菴咏區隱ｿ謨ｴ */
         .stApp h1 {{ font-size: 1.5rem !important; }}
         .stApp h2 {{ font-size: 1.3rem !important; }}
         .stApp h3 {{ font-size: 1.1rem !important; }}
     }}
     
-    /* スマホ幅での余白・崩れ防止レスポンシブクエリ */
+    /* 繧ｹ繝槭・蟷・〒縺ｮ菴咏區繝ｻ蟠ｩ繧碁亟豁｢繝ｬ繧ｹ繝昴Φ繧ｷ繝悶け繧ｨ繝ｪ */
     @media (max-width: 640px) {{
         .block-container {{
             padding-top: 1.0rem !important;
@@ -571,13 +566,13 @@ if theme_mode == "light":
             font-size: 0.85rem !important;
             white-space: normal !important;
         }}
-        /* モバイル表示時の文字サイズと余白調整 */
+        /* 繝｢繝舌う繝ｫ陦ｨ遉ｺ譎ゅ・譁・ｭ励し繧､繧ｺ縺ｨ菴咏區隱ｿ謨ｴ */
         .stApp h1 {{ font-size: 1.5rem !important; }}
         .stApp h2 {{ font-size: 1.3rem !important; }}
         .stApp h3 {{ font-size: 1.1rem !important; }}
     }}
 
-    /* 静かな待機中アニメーション定義 */
+    /* 髱吶°縺ｪ蠕・ｩ滉ｸｭ繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ螳夂ｾｩ */
     @keyframes slow-pulse {{
         0% {{ transform: scale(1); opacity: 0.25; }}
         50% {{ transform: scale(1.1); opacity: 0.6; }}
@@ -610,13 +605,13 @@ else:
     # Quiet Night Mode
     st.markdown(f"""
     <style>
-    /* Streamlitデフォルトヘッダー・フッター非表示 (SaaS感の完全排除) */
+    /* Streamlit繝・ヵ繧ｩ繝ｫ繝医・繝・ム繝ｼ繝ｻ繝輔ャ繧ｿ繝ｼ髱櫁｡ｨ遉ｺ (SaaS諢溘・螳悟・謗帝勁) */
     header[data-testid="stHeader"], footer {{
         visibility: hidden !important;
         height: 0px !important;
     }}
     
-    /* アプリ全体背景 & フォント (深夜のディープな空間演出) */
+    /* 繧｢繝励Μ蜈ｨ菴楢レ譎ｯ & 繝輔か繝ｳ繝・(豺ｱ螟懊・繝・ぅ繝ｼ繝励↑遨ｺ髢捺ｼ泌・) */
     .stApp, [data-testid="stAppViewContainer"] {{
         background: radial-gradient(circle at 30% 20%, #040810 0%, #020407 60%, #010204 100%) !important;
         color: #cbd5e1 !important;
@@ -637,14 +632,14 @@ else:
     .stApp h3 {{ font-size: {h3_font_size} !important; }}
     .stApp h4 {{ font-size: {h4_font_size} !important; }}
     
-    /* コンテナの余白調整（縦長の静かな余白空間） */
+    /* 繧ｳ繝ｳ繝・リ縺ｮ菴咏區隱ｿ謨ｴ・育ｸｦ髟ｷ縺ｮ髱吶°縺ｪ菴咏區遨ｺ髢難ｼ・*/
     .block-container {{
         padding-top: 2.0rem !important;
         padding-bottom: 5rem !important;
         max-width: 950px !important;
     }}
     
-    /* 横線の非表示・透過化 */
+    /* 讓ｪ邱壹・髱櫁｡ｨ遉ｺ繝ｻ騾城℃蛹・*/
     hr {{
         border: none !important;
         height: 1px !important;
@@ -652,7 +647,7 @@ else:
         margin: 2.5rem 0 !important;
     }}
     
-    /* ガラスカード調 (stAlert, widgets) - ボーダー極細・シャドウ超ソフト化 */
+    /* 繧ｬ繝ｩ繧ｹ繧ｫ繝ｼ繝芽ｪｿ (stAlert, widgets) - 繝懊・繝繝ｼ讌ｵ邏ｰ繝ｻ繧ｷ繝｣繝峨え雜・た繝輔ヨ蛹・*/
     div.stAlert, [data-testid="stExpander"] {{
         background-color: rgba(9, 14, 26, 0.35) !important;
         color: #cbd5e1 !important;
@@ -665,7 +660,7 @@ else:
         margin-bottom: 1.2rem !important;
     }}
     
-    /* ボタンのQuiet Luxury化 (ゴールド・アンバー調) */
+    /* 繝懊ち繝ｳ縺ｮQuiet Luxury蛹・(繧ｴ繝ｼ繝ｫ繝峨・繧｢繝ｳ繝舌・隱ｿ) */
     .stButton > button {{
         background-color: rgba(9, 14, 26, 0.5) !important;
         color: #94a3b8 !important;
@@ -696,7 +691,35 @@ else:
         border-color: rgba(197, 168, 128, 0.5) !important;
         box-shadow: 0 0 0 3px rgba(197, 168, 128, 0.15) !important;
     }}
-    /* 選択済み (primary) ボタンの上質なQuiet Luxury化 (沈む背景・輪郭強調・身体感覚グロー) */
+    div[data-testid="stForm"] button[kind="secondaryFormSubmit"],
+    div[data-testid="stForm"] button[data-testid="baseButton-secondaryFormSubmit"] {{
+        background-color: #EAF1F8 !important;
+        color: #5E6F82 !important;
+        border: 1px solid #D7E2EC !important;
+        border-radius: 18px !important;
+        font-weight: 500 !important;
+        box-shadow: none !important;
+    }}
+    div[data-testid="stForm"] button[kind="secondaryFormSubmit"]:hover,
+    div[data-testid="stForm"] button[data-testid="baseButton-secondaryFormSubmit"]:hover {{
+        background-color: #DDEAF5 !important;
+        color: #5E6F82 !important;
+        border-color: #C7D7E6 !important;
+        box-shadow: 0 6px 18px rgba(106, 140, 175, 0.08) !important;
+        transform: translateY(-1px);
+    }}
+    div[data-testid="stForm"] div[data-baseweb="input"],
+    div[data-testid="stForm"] .stTextInput input {{
+        border-color: #D7E2EC !important;
+        box-shadow: none !important;
+    }}
+    div[data-testid="stForm"] div[data-baseweb="input"]:focus-within,
+    div[data-testid="stForm"] .stTextInput input:focus {{
+        border-color: #BFD0E2 !important;
+        box-shadow: 0 0 0 3px rgba(191, 208, 226, 0.24) !important;
+        outline: none !important;
+    }}
+    /* 驕ｸ謚樊ｸ医∩ (primary) 繝懊ち繝ｳ縺ｮ荳願ｳｪ縺ｪQuiet Luxury蛹・(豐医・閭梧勹繝ｻ霈ｪ驛ｭ蠑ｷ隱ｿ繝ｻ霄ｫ菴捺─隕壹げ繝ｭ繝ｼ) */
     .stButton > button[kind="primary"], .stButton > button[data-testid="baseButton-primary"] {{
         background-color: rgba(197, 168, 128, 0.08) !important;
         color: #e2e8f0 !important;
@@ -710,7 +733,7 @@ else:
         color: #ffffff !important;
     }}
     
-    /* 入力エリア */
+    /* 蜈･蜉帙お繝ｪ繧｢ */
     .stChatInput textarea, .stTextArea textarea, .stTextInput input {{
         background-color: rgba(9, 14, 26, 0.65) !important;
         color: #cbd5e1 !important;
@@ -723,7 +746,7 @@ else:
         opacity: 1 !important;
     }}
     
-    /* タブのスタイリング（SaaS管理画面感を極限まで消去） */
+    /* 繧ｿ繝悶・繧ｹ繧ｿ繧､繝ｪ繝ｳ繧ｰ・・aaS邂｡逅・判髱｢諢溘ｒ讌ｵ髯舌∪縺ｧ豸亥悉・・*/
     div[data-testid="stTabBar"] {{
         background: transparent !important;
         border: none !important;
@@ -746,7 +769,7 @@ else:
         font-weight: 500 !important;
     }}
     
-    /* 静かな選択カードの Quiet Night スタイル */
+    /* 髱吶°縺ｪ驕ｸ謚槭き繝ｼ繝峨・ Quiet Night 繧ｹ繧ｿ繧､繝ｫ */
     div[class^="status-btn-"] + div div.stButton > button {{
         min-height: 140px !important;
         height: auto !important;
@@ -771,7 +794,7 @@ else:
         transform: translateY(-1px);
     }}
     
-    /* Selectbox (Theme Selector) のSaaS感排除 */
+    /* Selectbox (Theme Selector) 縺ｮSaaS諢滓賜髯､ */
     div[data-testid="stSelectbox"] > div {{
         background-color: transparent !important;
         border: none !important;
@@ -783,7 +806,7 @@ else:
         box-shadow: 0 4px 20px rgba(0,0,0,0.2) !important;
     }}
     
-    /* Accessibility Mode コンテナ */
+    /* Accessibility Mode 繧ｳ繝ｳ繝・リ */
     div.accessibility-container {{
         background: rgba(9, 14, 26, 0.35) !important;
         border: 1px solid rgba(197, 168, 128, 0.08) !important;
@@ -795,7 +818,7 @@ else:
         -webkit-backdrop-filter: blur(16px) !important;
     }}
     
-    /* 絵文字の半透過ノイズ低減 */
+    /* 邨ｵ譁・ｭ励・蜊企城℃繝弱う繧ｺ菴取ｸ・*/
     .emoji-dim {{
         opacity: 0.5 !important;
         display: inline-block;
@@ -806,7 +829,7 @@ else:
         opacity: 0.9 !important;
     }}
 
-    /* 静かな待機中アニメーション定義 */
+    /* 髱吶°縺ｪ蠕・ｩ滉ｸｭ繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ螳夂ｾｩ */
     @keyframes slow-pulse-night {{
         0% {{ transform: scale(1); opacity: 0.15; }}
         50% {{ transform: scale(1.1); opacity: 0.5; }}
@@ -836,7 +859,7 @@ else:
     </style>
     """, unsafe_allow_html=True)
 
-# ── モバイル時の初見導線を少しだけ前に出す共通調整 ──
+# 笏笏 繝｢繝舌う繝ｫ譎ゅ・蛻晁ｦ句ｰ守ｷ壹ｒ蟆代＠縺縺大燕縺ｫ蜃ｺ縺吝・騾夊ｪｿ謨ｴ 笏笏
 st.markdown("""
 <style>
 @media (max-width: 640px) {
@@ -983,9 +1006,9 @@ div[data-baseweb="popover"] [role="option"] * {
 .naomi-home-shell {
     position: relative;
     overflow: hidden;
-    min-height: 680px;
+    min-height: 0;
     margin-top: 1.5rem;
-    padding: clamp(2rem, 5vw, 4.8rem);
+    padding: clamp(1.6rem, 4vw, 3.4rem);
     border-radius: 34px;
     border: 1px solid rgba(255, 255, 255, 0.72);
     background:
@@ -1080,7 +1103,7 @@ div[data-baseweb="popover"] [role="option"] * {
     position: relative;
     z-index: 1;
     max-width: 680px;
-    margin: 5rem auto 0;
+    margin: 1.8rem auto 0;
     text-align: center;
 }
 .naomi-home-symbol {
@@ -1110,7 +1133,7 @@ div[data-baseweb="popover"] [role="option"] * {
     line-height: 2;
     font-size: 1.05rem;
     letter-spacing: 0.04em;
-    margin-bottom: 3rem;
+    margin-bottom: 2rem;
 }
 .naomi-home-actions {
     position: relative;
@@ -1122,8 +1145,8 @@ div[data-baseweb="popover"] [role="option"] * {
     margin: 0 auto;
 }
 .naomi-home-action-card {
-    min-height: 150px;
-    padding: 1.7rem 1.4rem;
+    min-height: 124px;
+    padding: 1.25rem 1.2rem;
     border-radius: 28px;
     border: 1px solid rgba(255, 255, 255, 0.74);
     background: rgba(255, 255, 255, 0.50);
@@ -1198,25 +1221,60 @@ div[data-baseweb="popover"] [role="option"] * {
 }
 @media (max-width: 780px) {
     .naomi-home-shell {
-        padding: 1.4rem;
+        padding: 1.1rem;
         min-height: 0;
+        margin-top: 0.9rem;
     }
     .naomi-home-still-life {
-        opacity: 0.28;
-        top: 6rem;
-        right: 0.5rem;
+        display: none;
     }
     .naomi-home-copy {
-        margin-top: 2.8rem;
+        margin-top: 1.1rem;
+    }
+    .naomi-home-symbol {
+        width: 54px;
+        height: 54px;
+        margin-bottom: 0.8rem;
+        font-size: 1.55rem;
+    }
+    .naomi-home-title {
+        font-size: 1.55rem;
+        line-height: 1.55;
+        margin-bottom: 0.8rem;
+    }
+    .naomi-home-sub {
+        font-size: 0.94rem;
+        line-height: 1.85;
+        margin-bottom: 1.1rem;
     }
     .naomi-home-actions {
         grid-template-columns: 1fr;
+        gap: 0.75rem;
+        display: none;
+    }
+    .naomi-home-action-card {
+        min-height: 92px;
+        padding: 0.9rem 1rem;
+        border-radius: 18px;
+    }
+    .naomi-home-action-icon {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 0.45rem;
+        font-size: 1.2rem;
+    }
+    .naomi-home-action-title {
+        font-size: 0.98rem;
+    }
+    .naomi-home-action-sub {
+        font-size: 0.78rem;
+        line-height: 1.45;
     }
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Header & Mode Switcher ──
+# 笏笏 Header & Mode Switcher 笏笏
 col_header_title, col_header_lang, col_header_theme, col_header_settings = st.columns([2.8, 0.8, 1, 0.6])
 
 with col_header_title:
@@ -1237,7 +1295,7 @@ with col_header_title:
 
 with col_header_lang:
     st.markdown("<div style='padding-top: 0.8rem;'></div>", unsafe_allow_html=True)
-    lang_options = {"JP": "🇯🇵 日本語", "EN": "🇺🇸 English"}
+    lang_options = {"JP": "JP 日本語", "EN": "EN English"}
     st.markdown('<div class="header-lang-control"></div>', unsafe_allow_html=True)
     selected_lang = st.selectbox(
         "Language",
@@ -1269,75 +1327,75 @@ with col_header_settings:
     st.markdown("<div style='padding-top: 0.8rem;'></div>", unsafe_allow_html=True)
     st.markdown('<div class="header-settings-control"></div>', unsafe_allow_html=True)
     with st.popover("⚙", use_container_width=False):
-        detail_result = st.session_state.last_result[1] if st.session_state.last_result else None
-        has_detail = detail_result is not None
-
-        st.markdown(tr("### 📊 Internal State & Response", "### 📊 内部の状態と応対"))
-        if not has_detail:
-            st.caption(tr("NAOMI has not responded yet. Detailed state will appear here after a response.", "まだNAOMIの返答はありません。返答後に、ここへ詳しい状態が入ります。"))
-
-        col_state, col_strategy, col_mode = st.columns(3)
-
-        with col_state:
-            st.markdown(tr("##### 🧠 State Estimate", "##### 🧠 状態の見立て"))
-            if has_detail:
-                st.json({
-                    tr("stress", "ストレス"): round(detail_result.state.stress, 2),
-                    tr("loneliness", "孤独感"): round(detail_result.state.loneliness, 2),
-                    "energy": round(detail_result.state.energy, 2),
-                    "need_listening": round(detail_result.state.need_listening, 2),
-                    "need_advice": round(detail_result.state.need_advice, 2),
-                })
-            else:
-                st.markdown(tr("Not available", "未取得"))
-
-        with col_strategy:
-            st.markdown(tr("##### 🎯 Response Strategy", "##### 🎯 応対方針"))
-            if has_detail:
-                a_mode_map = {"WAIT": tr("Wait a little", "少し待つ"), "ON": tr("Only when needed", "必要な時だけ"), "OFF": tr("Hold back", "控える")}
-                st.markdown(f"**{tr('Advice', '助言')}:** {a_mode_map.get(detail_result.strategy.advice_mode, detail_result.strategy.advice_mode)}")
-                st.write(f"👂 **{tr('Listening stance', '聴く姿勢')}:** {tr('Priority', '優先') if detail_result.strategy.listening_mode else tr('Normal', '通常')}")
-                st.write(f"🎭 **{tr('Tone', 'トーン')}:** `{detail_result.strategy.emotional_tone}`")
-            else:
-                st.markdown(tr("Not available", "未取得"))
-                st.write(tr("Shown after NAOMI responds", "NAOMIの返答後に表示"))
-
-        with col_mode:
-            st.markdown(tr("##### 🔁 Response Intensity", "##### 🔁 応対の強さ"))
-            if has_detail:
-                mode_ja_map = {"Listening": tr("Listening", "聴く姿勢"), "Listening First": tr("Receive first", "まず受け止める"), "Advice": tr("Suggest only when needed", "必要な時だけ提案"), "Companion": tr("Quiet companion", "静かにそばにいる")}
-                st.markdown(f"**{tr('Response', '応対')}:** `{mode_ja_map.get(detail_result.mode.value, detail_result.mode.value)}`")
-                pressure_map = {"VERY_LOW": ("🫧", 0.1, tr("Very low", "極めて低い")), "LOW": ("🌙", 0.3, tr("Low", "低い")), "MEDIUM": ("⚠️", 0.6, tr("Standard", "標準")), "HIGH": ("🚨", 0.9, tr("High", "高い"))}
-                p_icon, p_val, p_label = pressure_map.get(detail_result.pressure_level, ("⚪", 0.5, tr("Unknown", "不明")))
-                st.markdown(f"**{tr('Amount of words', '言葉の量')}**: {p_icon} {p_label}")
-                st.progress(p_val)
-            else:
-                st.markdown(tr("Not available", "未取得"))
-                st.progress(0)
-
-        if has_detail:
-            st.divider()
-            st.markdown(tr("### ⚖️ Word Amount Reference", "### ⚖️ 言葉の量の参考"))
-            st.markdown(f"<p style='color:gray;'>{tr('Even with the same message, there is a difference between rushing and waiting gently.', '同じ言葉でも、急がせる返し方と、少し待つ返し方があります。')}</p>", unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
-            generic_text = GENERIC_AI_RESPONSES.get(detail_result.scenario_id, GENERIC_AI_RESPONSES["default"])
-            if st.session_state.get("language", "JP") == "EN":
-                generic_text = GENERIC_AI_RESPONSES_EN.get(detail_result.scenario_id, GENERIC_AI_RESPONSES_EN["default"])
-            with c1:
-                st.markdown(f'<div style="background-color:#f0f2f6;padding:1.5rem;border-radius:0.5rem;border-left:5px solid #9ca3af;"><b style="color:#333;">{tr("When there are too many words", "言葉が多すぎる時")}</b><br><br><span style="color:#333;">{generic_text}</span></div>', unsafe_allow_html=True)
-            with c2:
-                st.markdown(f'<div style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);color:#e0e0e0;padding:1.5rem;border-radius:0.5rem;border-left:5px solid #7c83ff;"><b>🌙 NAOMI</b><br><br>{display_response_text(detail_result.text, detail_result.scenario_id)}</div>', unsafe_allow_html=True)
-
-            if detail_result.facs_hint:
-                st.divider()
-                st.markdown("##### 🔮 FACS Hint")
-                st.code("  ".join(detail_result.facs_hint), language=None)
+        st.markdown(tr("### Internal State", "### 内部状態"))
+        if st.session_state.last_result:
+            detail_result = st.session_state.last_result[1]
+            st.json({
+                "stress": round(detail_result.state.stress, 2),
+                "energy": round(detail_result.state.energy, 2),
+                "pressure": detail_result.pressure_level,
+                "phase": (getattr(detail_result, "asurada_state", {}) or {}).get("phase"),
+            })
         else:
-            st.divider()
-            st.markdown(tr("### ⚖️ Word Amount Reference", "### ⚖️ 言葉の量の参考"))
-            st.caption(tr("After NAOMI responds, a word-amount comparison will appear here.", "NAOMIの返答後に、言葉の量の比較がここに表示されます。"))
+            st.caption(tr("NAOMI has not responded yet.", "まだNAOMIの返答はありません。"))
 
 if st.session_state.naomi_screen == "home":
+    greeting_text = home_greeting()
+    chat_bg = "rgba(255, 255, 255, 0.62)" if theme_mode == "light" else "rgba(13, 20, 35, 0.45)"
+    chat_border = "rgba(106, 140, 175, 0.14)" if theme_mode == "light" else "rgba(197, 168, 128, 0.14)"
+    chat_title = "#4f6f90" if theme_mode == "light" else "#c5a880"
+    home_chat_intro = tr(
+        "You can speak from here without choosing a menu.",
+        "メニューを選ばなくても、ここからそのまま話せます。"
+    )
+    home_chat_sub = tr(
+        "A short phrase is enough. NAOMI first listens and asks only what is needed to understand the situation.",
+        "短い言葉で大丈夫です。NAOMIはまず受け止めて、状況を知るために必要なことだけをそっと確認します。"
+    )
+    st.markdown(f"""
+    <div style="background:{chat_bg}; border:1px solid {chat_border}; border-radius:22px; padding:1.25rem 1.35rem; margin:1rem auto 1rem auto; max-width:860px; box-shadow:0 18px 48px rgba(106, 140, 175, 0.07);">
+        <div style="font-family:'Noto Serif JP', serif; color:{chat_title}; font-size:1.08rem; margin-bottom:0.35rem; letter-spacing:0.04em;">
+            {greeting_text}
+        </div>
+        <div style="color:gray; font-size:0.88rem; line-height:1.7;">
+            {home_chat_intro}<br>
+            {home_chat_sub}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    with st.form("home_free_chat_form", clear_on_submit=True):
+        home_user_text = st.text_input(
+            tr("Talk to NAOMI", "NAOMIに話しかける"),
+            placeholder=tr("Example: I have been tired lately", "例：最近疲れていて"),
+            label_visibility="collapsed",
+        )
+        submitted_home_chat = st.form_submit_button(tr("Send quietly", "そっと送る"), use_container_width=False)
+    if submitted_home_chat and home_user_text.strip():
+        if hasattr(st.session_state.agent_core, "process_free_chat"):
+            result = st.session_state.agent_core.process_free_chat(home_user_text.strip(), active_profile())
+        else:
+            result = st.session_state.agent_core.process_input(home_user_text.strip(), active_profile())
+        st.session_state.last_result = (home_user_text.strip(), result)
+        st.session_state.proactive_question = None
+        st.rerun()
+
+    if st.session_state.last_result:
+        _, result = st.session_state.last_result
+        if result.text:
+            visible_phase_label = phase_label(result)
+            if visible_phase_label:
+                st.markdown(f"""
+                <div style="display:inline-block; background:rgba(106, 140, 175, 0.08); border:1px solid rgba(106, 140, 175, 0.16); color:{chat_title}; border-radius:999px; padding:0.35rem 0.75rem; font-size:0.85rem; margin:0.8rem 0 0.1rem 0;">
+                    {visible_phase_label}
+                </div>
+                """, unsafe_allow_html=True)
+            result_text_display = display_response_text(result.text, result.scenario_id)
+            st.markdown(f"""
+            <div style="background:{chat_bg}; border:1px solid {chat_border}; border-radius:22px; padding:1.35rem 1.45rem; margin:1rem auto 1.4rem auto; max-width:860px; box-shadow:0 14px 40px rgba(0,0,0,0.025);">
+                <h5 style="margin:0 0 0.7rem 0; font-family:'Noto Serif JP', serif; color:{chat_title}; font-size:1.05rem; letter-spacing:0.05em;">NAOMI</h5>
+                <p style="font-size:1.02rem; line-height:1.85; margin:0;">{result_text_display}</p>
+            </div>
+            """, unsafe_allow_html=True)
     st.markdown(f"""
     <section class="naomi-home-shell">
         <div class="naomi-home-still-life" aria-hidden="true">
@@ -1349,7 +1407,8 @@ if st.session_state.naomi_screen == "home":
             <div class="naomi-home-symbol">🌙</div>
             <h2 class="naomi-home-title">{t("welcome_title")}</h2>
             <p class="naomi-home-sub">
-                {t("welcome_subtitle")}
+                {greeting_text}<br>
+                <span style="font-size:0.92em; opacity:0.82;">{t("welcome_subtitle")}</span>
             </p>
         </div>
         <div class="naomi-home-actions">
@@ -1371,6 +1430,7 @@ if st.session_state.naomi_screen == "home":
         </div>
     </section>
     """, unsafe_allow_html=True)
+
 
     st.markdown('<div class="naomi-home-actions-buttons">', unsafe_allow_html=True)
     home_col1, home_col2, home_col3 = st.columns(3)
@@ -2466,7 +2526,7 @@ if user_input:
         st.error(f"Agent実行中にエラーが発生しました: {e}")
 
 # --- 結果表示セクション ---
-if st.session_state.last_result and not suppress_bottom_chat and st.session_state.naomi_screen != "state":
+if st.session_state.last_result and not suppress_bottom_chat:
     input_text, result = st.session_state.last_result
     profile = active_profile()
 
