@@ -2,8 +2,15 @@ import os
 import json
 import logging
 from typing import Dict, List, Optional, Any
-import google.generativeai as genai
-from dotenv import load_dotenv
+try:
+    import google.generativeai as genai
+except ModuleNotFoundError:
+    genai = None
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    def load_dotenv():
+        return False
 
 # .envファイルを読み込む
 load_dotenv()
@@ -16,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Cloud Run / ローカルのどちらでも使いやすいように、GEMINI_API_KEY と GOOGLE_API_KEY の両方に対応する。
 # 優先順位はプロジェクト内の名称に合わせて GEMINI_API_KEY を先にし、既存運用互換として GOOGLE_API_KEY も受け付ける。
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-if API_KEY:
+if API_KEY and genai:
     genai.configure(api_key=API_KEY)
 else:
     logger.warning("GEMINI_API_KEY or GOOGLE_API_KEY not found. Gemini Brain will run in fallback mode.")
@@ -26,7 +33,7 @@ class GeminiBrain:
     
     def __init__(self, model_name: str = "gemini-1.5-flash"):
         self.model_name = model_name
-        self.is_available = bool(API_KEY)
+        self.is_available = bool(API_KEY and genai)
         if self.is_available:
             self.model = genai.GenerativeModel(model_name)
         else:

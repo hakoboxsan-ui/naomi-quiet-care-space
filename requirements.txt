@@ -1,14 +1,3 @@
-# NAOMI Project dependencies
-# Backend
-fastapi
-uvicorn[standard]
-
-# Agent / AI dependencies
-# openai
 google-generativeai
-
-# Utilities
 python-dotenv
-
-# Frontend
 streamlit

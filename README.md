@@ -120,6 +120,43 @@ gcloud run deploy naomi-project \
   --set-env-vars GEMINI_API_KEY=YOUR_GEMINI_API_KEY
 ```
 
+For a fallback-only demo without Gemini, omit `--set-env-vars`. NAOMI will still start and use the local robust fallback behavior.
+
+Recommended hackathon deployment command:
+
+```bash
+gcloud run deploy naomi \
+  --source . \
+  --region asia-northeast1 \
+  --allow-unauthenticated \
+  --memory 1Gi \
+  --cpu 1 \
+  --max-instances 2
+```
+
+If `asia-northeast1` is unavailable, `us-central1` is also suitable for the demo.
+
+### 3. Docker / Cloud Run container notes
+
+The included `Dockerfile` runs Streamlit on the Cloud Run-provided `PORT` and binds to `0.0.0.0`.
+
+```bash
+docker build -t naomi-cloudrun .
+docker run --rm -p 8080:8080 -e PORT=8080 naomi-cloudrun
+```
+
+Open `http://localhost:8080` and confirm that the home screen, Interactive Demo, State Organization, and Health State Memo render without a Gemini API key.
+
+### 4. Required environment variables
+
+| Name | Required | Purpose |
+| --- | --- | --- |
+| `PORT` | Cloud Run provides it | Streamlit server port. Defaults to `8080` in Docker. |
+| `GEMINI_API_KEY` | No | Preferred Gemini API key variable. |
+| `GOOGLE_API_KEY` | No | Compatible Gemini API key variable. |
+
+No API key is required for basic operation. When neither Gemini key is configured, NAOMI keeps the demo working through local fallback logic.
+
 ---
 
 ## 📄 ライセンス (LICENSE)
