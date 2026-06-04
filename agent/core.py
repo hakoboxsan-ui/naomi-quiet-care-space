@@ -411,6 +411,10 @@ class NaomiAgentCore:
             "questions_per_turn": 1,
             "allow_advice_skip": True,
             "inputs": [],
+            "problem_type": None,
+            "known_facts": [],
+            "missing_info": [],
+            "next_question": None,
             "advice_unlocked": False,
             "pending_user_requested": False,
             "completed": False,
@@ -550,7 +554,9 @@ class NaomiAgentCore:
         markers = [
             "疲", "しんど", "つら", "辛", "不安", "困", "痛", "眠", "寝",
             "気持ち", "相談", "助け", "どうしたら", "どうすれば",
-            "tired", "hard", "anxious", "advice", "help",
+            "tired", "fatigue", "exhausted", "drained", "hard", "anxious", "anxiety",
+            "worried", "lonely", "alone", "isolated", "pain", "fever", "sick",
+            "advice", "help",
         ]
         lowered = text_input.lower()
         return any(marker in lowered for marker in markers)
@@ -573,6 +579,7 @@ class NaomiAgentCore:
             self.asurada = self._new_asurada_context()
 
         self.asurada.setdefault("inputs", []).append(text)
+        self._asurada_update_structured_state(text)
         if self._asurada_user_requested_advice(text):
             self.asurada["pending_user_requested"] = True
 
@@ -584,9 +591,8 @@ class NaomiAgentCore:
 
         if phase == "LISTEN":
             empathy = self._asurada_empathy(text, language)
-            self.asurada["probe_count"] = 1
-            question = self._asurada_probe_question(self.asurada["probe_count"], language, text)
-            response_text = f"{empathy}\n\n{question}"
+            self.asurada["next_question"] = self._asurada_probe_question(1, language, text)
+            response_text = empathy
             self.asurada["phase"] = "PROBE"
         elif phase == "PROBE":
             self.asurada["probe_count"] = min(
@@ -597,6 +603,7 @@ class NaomiAgentCore:
                 question = self._asurada_advice_wait_ack(language)
             else:
                 question = self._asurada_probe_question(self.asurada["probe_count"], language, text)
+            self.asurada["next_question"] = question
             response_text = question
             if self.asurada["probe_count"] >= self.asurada["max_probes"] or self.asurada.get("pending_user_requested"):
                 self.asurada["advice_unlocked"] = True
@@ -618,6 +625,10 @@ class NaomiAgentCore:
             "question": question,
             "state_summary": state_summary,
             "advice": advice,
+            "problem_type": self.asurada.get("problem_type"),
+            "known_facts": list(self.asurada.get("known_facts", [])),
+            "missing_info": list(self.asurada.get("missing_info", [])),
+            "next_question": self.asurada.get("next_question"),
         }
 
         return AgentResponse(
@@ -638,6 +649,52 @@ class NaomiAgentCore:
         ]
         lowered = text.lower()
         return any(marker in lowered for marker in markers)
+
+    def _asurada_infer_problem_type(self, text: str) -> str:
+        lowered = (text or "").lower()
+        category_markers = {
+            "health": [
+                "pain", "fever", "sick", "nausea", "headache", "stomach", "breathing",
+                "痛い", "痛み", "熱", "発熱", "吐き気", "吐いた", "頭痛", "腹痛",
+                "お腹", "息苦しい", "息ができない", "体調",
+            ],
+            "fatigue": [
+                "tired", "fatigue", "exhausted", "drained", "no energy", "can't rest",
+                "疲れ", "疲れて", "疲労", "だるい", "しんどい", "休めない",
+                "眠れない", "寝られない", "体が重い", "気力がない", "限界",
+            ],
+            "anxiety": [
+                "anxious", "anxiety", "worried", "scared", "panic", "uneasy", "overwhelmed",
+                "不安", "怖い", "心配", "落ち着かない", "ざわざわ", "考えすぎ",
+            ],
+            "loneliness": [
+                "lonely", "alone", "isolated", "no one", "left out",
+                "ひとり", "一人", "孤独", "寂しい", "さびしい", "抱え込んで",
+                "誰にも話せない", "そばにいてほしい",
+            ],
+        }
+        for category, markers in category_markers.items():
+            if any(marker in lowered or marker in text for marker in markers):
+                return category
+        return "general"
+
+    def _asurada_update_structured_state(self, text: str) -> None:
+        problem_type = self._asurada_infer_problem_type(text)
+        if not self.asurada.get("problem_type") or self.asurada.get("problem_type") == "general":
+            self.asurada["problem_type"] = problem_type
+
+        facts = self.asurada.setdefault("known_facts", [])
+        if text and text not in facts:
+            facts.append(text)
+
+        planned_missing = {
+            "health": ["timing", "severity", "daily_impact"],
+            "fatigue": ["main_source", "rest_status", "daily_impact"],
+            "anxiety": ["worry_target", "current_intensity", "support_needed"],
+            "loneliness": ["wanted_connection", "recent_trigger", "support_needed"],
+        }
+        fallback_missing = ["context", "hardest_part", "daily_impact"]
+        self.asurada["missing_info"] = list(planned_missing.get(self.asurada.get("problem_type"), fallback_missing))
 
     def _asurada_empathy(self, text: str, language: str) -> str:
         if language == "EN":
@@ -665,6 +722,58 @@ class NaomiAgentCore:
         return "話してくれてありがとうございます。\nここでは急がなくて大丈夫です。今の状態を、少しずつ一緒に整理していきましょう。"
 
     def _asurada_probe_question(self, probe_count: int, language: str, text: str = "") -> str:
+        problem_type = self.asurada.get("problem_type") or self._asurada_infer_problem_type(text)
+        english_questions = {
+            "health": [
+                "When did you first notice the physical discomfort?",
+                "How strong does it feel right now: mild, moderate, or severe?",
+                "Is it making anything in daily life difficult right now?",
+            ],
+            "fatigue": [
+                "Does this tiredness feel closer to body fatigue, mental fatigue, or both?",
+                "Have you been able to rest at all recently?",
+                "What is the tiredness making hardest to do right now?",
+            ],
+            "anxiety": [
+                "Does the anxiety feel more about something that may happen, or something you are already carrying?",
+                "How strong does it feel right now: low, medium, or high?",
+                "Would it help more to be heard, or to organize what is making you anxious?",
+            ],
+            "loneliness": [
+                "Do you want someone to listen, or do you mainly want to feel less alone for a moment?",
+                "Did something today make the loneliness stronger?",
+                "Would quiet company or organizing the feeling help more right now?",
+            ],
+        }
+        japanese_questions = {
+            "health": [
+                "体のつらさは、いつ頃から気になっていますか？",
+                "今のつらさは、軽い・中くらい・強いのどれに近いですか？",
+                "日常生活で特に困っていることはありますか？",
+            ],
+            "fatigue": [
+                "その疲れは、体の疲れ・気持ちの疲れ・両方のどれに近いですか？",
+                "最近、少しでも休めている時間はありますか？",
+                "今いちばん負担になっていることは何ですか？",
+            ],
+            "anxiety": [
+                "その不安は、これから起きることへの不安ですか？それとも、今すでに抱えていることへの不安ですか？",
+                "今の不安の強さは、低い・中くらい・高いのどれに近いですか？",
+                "今は、聞いてもらうことと整理することのどちらが助けになりそうですか？",
+            ],
+            "loneliness": [
+                "今は、誰かに聞いてほしい感じですか？それとも、ただ一人ではない感じがほしいですか？",
+                "今日、その寂しさが強くなるきっかけはありましたか？",
+                "今は、そばにいる感じと気持ちの整理のどちらが助けになりそうですか？",
+            ],
+        }
+        if language == "EN" and problem_type in english_questions:
+            questions = english_questions[problem_type]
+            return questions[min(probe_count - 1, len(questions) - 1)]
+        if language != "EN" and problem_type in japanese_questions:
+            questions = japanese_questions[problem_type]
+            return questions[min(probe_count - 1, len(questions) - 1)]
+
         if language == "EN":
             questions = [
                 "When did you first notice it?",
