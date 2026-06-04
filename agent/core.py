@@ -414,7 +414,9 @@ class NaomiAgentCore:
             "problem_type": None,
             "known_facts": [],
             "missing_info": [],
+            "missing_info_initialized_for": None,
             "next_question": None,
+            "last_question_key": None,
             "advice_unlocked": False,
             "pending_user_requested": False,
             "completed": False,
@@ -579,6 +581,14 @@ class NaomiAgentCore:
             self.asurada = self._new_asurada_context()
 
         self.asurada.setdefault("inputs", []).append(text)
+        last_question_key = self.asurada.get("last_question_key")
+        if last_question_key:
+            self.asurada["missing_info"] = [
+                item for item in self.asurada.get("missing_info", [])
+                if item != last_question_key
+            ]
+            self.asurada["last_question_key"] = None
+
         self._asurada_update_structured_state(text)
         if self._asurada_user_requested_advice(text):
             self.asurada["pending_user_requested"] = True
@@ -602,7 +612,13 @@ class NaomiAgentCore:
             if self.asurada.get("pending_user_requested"):
                 question = self._asurada_advice_wait_ack(language)
             else:
-                question = self._asurada_probe_question(self.asurada["probe_count"], language, text)
+                question, question_key = self._asurada_select_probe_question(
+                    self.asurada["probe_count"],
+                    language,
+                    text,
+                )
+                if question_key:
+                    self.asurada["last_question_key"] = question_key
             self.asurada["next_question"] = question
             response_text = question
             if self.asurada["probe_count"] >= self.asurada["max_probes"] or self.asurada.get("pending_user_requested"):
@@ -628,7 +644,9 @@ class NaomiAgentCore:
             "problem_type": self.asurada.get("problem_type"),
             "known_facts": list(self.asurada.get("known_facts", [])),
             "missing_info": list(self.asurada.get("missing_info", [])),
+            "missing_info_initialized_for": self.asurada.get("missing_info_initialized_for"),
             "next_question": self.asurada.get("next_question"),
+            "last_question_key": self.asurada.get("last_question_key"),
         }
 
         return AgentResponse(
@@ -679,14 +697,6 @@ class NaomiAgentCore:
         return "general"
 
     def _asurada_update_structured_state(self, text: str) -> None:
-        problem_type = self._asurada_infer_problem_type(text)
-        if not self.asurada.get("problem_type") or self.asurada.get("problem_type") == "general":
-            self.asurada["problem_type"] = problem_type
-
-        facts = self.asurada.setdefault("known_facts", [])
-        if text and text not in facts:
-            facts.append(text)
-
         planned_missing = {
             "health": ["timing", "severity", "daily_impact"],
             "fatigue": ["main_source", "rest_status", "daily_impact"],
@@ -694,7 +704,29 @@ class NaomiAgentCore:
             "loneliness": ["wanted_connection", "recent_trigger", "support_needed"],
         }
         fallback_missing = ["context", "hardest_part", "daily_impact"]
-        self.asurada["missing_info"] = list(planned_missing.get(self.asurada.get("problem_type"), fallback_missing))
+        supported_types = set(planned_missing)
+        initialized_for = self.asurada.get("missing_info_initialized_for")
+
+        if initialized_for in supported_types:
+            problem_type = initialized_for
+        else:
+            problem_type = self._asurada_infer_problem_type(text)
+            if problem_type in supported_types or not self.asurada.get("problem_type"):
+                self.asurada["problem_type"] = problem_type
+
+        if self.asurada.get("missing_info_initialized_for") != problem_type:
+            if problem_type in supported_types:
+                self.asurada["missing_info"] = list(planned_missing[problem_type])
+                self.asurada["missing_info_initialized_for"] = problem_type
+                self.asurada["problem_type"] = problem_type
+            elif problem_type == "general":
+                self.asurada["missing_info"] = list(fallback_missing)
+                self.asurada["missing_info_initialized_for"] = "general"
+                self.asurada["problem_type"] = "general"
+
+        facts = self.asurada.setdefault("known_facts", [])
+        if text and text not in facts:
+            facts.append(text)
 
     def _asurada_empathy(self, text: str, language: str) -> str:
         if language == "EN":
@@ -722,7 +754,17 @@ class NaomiAgentCore:
         return "話してくれてありがとうございます。\nここでは急がなくて大丈夫です。今の状態を、少しずつ一緒に整理していきましょう。"
 
     def _asurada_probe_question(self, probe_count: int, language: str, text: str = "") -> str:
+        question, _ = self._asurada_select_probe_question(probe_count, language, text)
+        return question
+
+    def _asurada_select_probe_question(self, probe_count: int, language: str, text: str = ""):
         problem_type = self.asurada.get("problem_type") or self._asurada_infer_problem_type(text)
+        planned_missing = {
+            "health": ["timing", "severity", "daily_impact"],
+            "fatigue": ["main_source", "rest_status", "daily_impact"],
+            "anxiety": ["worry_target", "current_intensity", "support_needed"],
+            "loneliness": ["wanted_connection", "recent_trigger", "support_needed"],
+        }
         english_questions = {
             "health": [
                 "When did you first notice the physical discomfort?",
@@ -768,11 +810,17 @@ class NaomiAgentCore:
             ],
         }
         if language == "EN" and problem_type in english_questions:
-            questions = english_questions[problem_type]
-            return questions[min(probe_count - 1, len(questions) - 1)]
+            slot = (self.asurada.get("missing_info") or [None])[0]
+            if slot in planned_missing[problem_type]:
+                questions = english_questions[problem_type]
+                return questions[planned_missing[problem_type].index(slot)], slot
+            return "", None
         if language != "EN" and problem_type in japanese_questions:
-            questions = japanese_questions[problem_type]
-            return questions[min(probe_count - 1, len(questions) - 1)]
+            slot = (self.asurada.get("missing_info") or [None])[0]
+            if slot in planned_missing[problem_type]:
+                questions = japanese_questions[problem_type]
+                return questions[planned_missing[problem_type].index(slot)], slot
+            return "", None
 
         if language == "EN":
             questions = [
@@ -783,23 +831,23 @@ class NaomiAgentCore:
         else:
             if probe_count == 1:
                 if any(word in text for word in ["仕事", "職場", "会社"]):
-                    return "お仕事の出来事を整理したい感じでしょうか。それとも、そこで感じている気持ちを整理したい感じでしょうか？"
+                    return "お仕事の出来事を整理したい感じでしょうか。それとも、そこで感じている気持ちを整理したい感じでしょうか？", None
                 if any(word in text for word in ["眠れない", "寝られない", "眠れ"]):
-                    return "考えごとで眠れない感じでしょうか。それとも、体が休まらない感じに近いでしょうか？"
+                    return "考えごとで眠れない感じでしょうか。それとも、体が休まらない感じに近いでしょうか？", None
                 if any(word in text for word in ["疲", "しんど", "休めない", "限界"]):
-                    return "お仕事や予定の疲れに近いでしょうか。それとも、気持ちの疲れに近いでしょうか？"
+                    return "お仕事や予定の疲れに近いでしょうか。それとも、気持ちの疲れに近いでしょうか？", None
                 if any(word in text for word in ["不安", "怖", "心配", "落ち着かない"]):
-                    return "その不安は、これから起きることへの不安に近いですか。それとも、今すでに抱えていることへの不安に近いですか？"
+                    return "その不安は、これから起きることへの不安に近いですか。それとも、今すでに抱えていることへの不安に近いですか？", None
                 if any(word in text for word in ["痛", "息苦", "熱", "頭痛", "吐き気", "体調"]):
-                    return "体のつらさが中心でしょうか。それとも、気持ちのつらさも一緒にありますか？"
+                    return "体のつらさが中心でしょうか。それとも、気持ちのつらさも一緒にありますか？", None
                 if any(word in text for word in ["寂", "一人", "ひとり", "孤独"]):
-                    return "誰かに聞いてほしい感じでしょうか。それとも、今はただそばにいてほしい感じに近いでしょうか？"
+                    return "誰かに聞いてほしい感じでしょうか。それとも、今はただそばにいてほしい感じに近いでしょうか？", None
             questions = [
                 "それは、いつ頃から続いていますか？",
                 "いま一番つらいのは、体の疲れ・気持ち・睡眠のどれに近いですか？",
                 "日常生活で特に困っていることはありますか？",
             ]
-        return questions[min(probe_count - 1, len(questions) - 1)]
+        return questions[min(probe_count - 1, len(questions) - 1)], None
 
     def _asurada_advice_wait_ack(self, language: str) -> str:
         if language == "EN":
