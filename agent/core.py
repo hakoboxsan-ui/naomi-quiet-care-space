@@ -621,7 +621,13 @@ class NaomiAgentCore:
                     self.asurada["last_question_key"] = question_key
             self.asurada["next_question"] = question
             response_text = question
-            if self.asurada["probe_count"] >= self.asurada["max_probes"] or self.asurada.get("pending_user_requested"):
+            supported_types = {"health", "fatigue", "anxiety", "loneliness"}
+            completed_missing_info = (
+                self.asurada.get("problem_type") in supported_types
+                and self.asurada.get("missing_info_initialized_for") == self.asurada.get("problem_type")
+                and self.asurada.get("missing_info") == []
+            )
+            if completed_missing_info or self.asurada["probe_count"] >= self.asurada["max_probes"] or self.asurada.get("pending_user_requested"):
                 self.asurada["advice_unlocked"] = True
                 self.asurada["phase"] = "ORGANIZE"
         elif phase == "ORGANIZE":
