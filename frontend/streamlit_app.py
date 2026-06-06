@@ -276,6 +276,45 @@ def keep_menu_top_once():
     st.session_state.last_result = None
     st.session_state.proactive_question = None
 
+def start_screen_link(extra_class=""):
+    lang = st.session_state.get("language", "JP")
+    label = "🏠 Start" if lang == "EN" else "🏠 はじめの画面へ"
+    return f'<a class="naomi-return-start {extra_class}" href="?screen=start&lang={lang}" target="_self">{label}</a>'
+
+def naomi_help_text(topic: str) -> str:
+    lang = st.session_state.get("language", "JP")
+    help_texts = {
+        "pressure": {
+            "JP": "会話圧を表します。NAOMIは急がせず、無理に結論を出さない接し方を大切にしています。Pressureが低いほど、落ち着いた接し方になります。",
+            "EN": "Shows conversation pressure. Lower pressure means NAOMI responds more calmly, without rushing you toward an answer.",
+        },
+        "staff_note": {
+            "JP": "今の状態を、人へ伝えやすく整理したメモです。診断ではありません。医師・看護師・介護士・支援者などへ状況を伝える補助として使えます。",
+            "EN": "A shareable note about the current state. It is not a diagnosis. It can help explain the situation to clinicians, carers, or supporters.",
+        },
+        "human_state": {
+            "JP": "会話から推定した現在の状態です。診断ではありません。NAOMIが接し方を決める参考として利用します。",
+            "EN": "An estimated current state from the conversation. It is not a diagnosis; NAOMI uses it only to adjust how gently to respond.",
+        },
+        "mode": {
+            "JP": "NAOMIが現在選んでいる接し方です。Listeningはまず受け止める段階、PROBEは少しだけ確認する段階、ORGANIZEはここまでを整理する段階、ADVISEは必要に応じて次の行動を案内する段階です。",
+            "EN": "The response approach NAOMI is using. Listening receives first, PROBE asks only what is needed, ORGANIZE summarizes, and ADVISE gives next-step guidance when appropriate.",
+        },
+        "intake_summary": {
+            "JP": "会話や入力内容を整理したメモです。あとで見返したり、人へ伝える補助として使えます。診断ではありません。",
+            "EN": "A short organized note from the conversation. It can help you review or share the situation later. It is not a diagnosis.",
+        },
+        "red_flag": {
+            "JP": "安全確認のサインです。強い負担や危険の可能性がある時に、安全を優先するための表示です。診断ではありません。",
+            "EN": "A safety signal. It appears when NAOMI should prioritize safety because there may be strong distress or risk. It is not a diagnosis.",
+        },
+    }
+    return help_texts.get(topic, {}).get(lang, help_texts.get(topic, {}).get("JP", ""))
+
+def naomi_help(topic: str, label: str = "❓"):
+    with st.popover(label, use_container_width=False):
+        st.markdown(naomi_help_text(topic))
+
 # --- 繧｢繧ｯ繧ｻ繧ｷ繝薙Μ繝・ぅ繧ｭ繝ｼ蜷梧悄 (Step 3: 驥崎､・屓驕ｿ & 逶ｸ莠貞酔譛・ ---
 if "large_font" not in st.session_state:
     st.session_state.large_font = False
@@ -308,6 +347,30 @@ st.markdown("""
 }
 .naomi-logo-link:hover {
     opacity: 0.72;
+}
+.naomi-return-start,
+.naomi-return-start:visited {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(106, 140, 175, 0.18);
+    background: rgba(255, 255, 255, 0.52);
+    color: inherit !important;
+    text-decoration: none !important;
+    font-size: 0.92rem;
+    font-weight: 400;
+    box-shadow: 0 10px 28px rgba(106, 140, 175, 0.06);
+}
+.naomi-return-start:hover {
+    opacity: 0.82;
+    transform: translateY(-1px);
+}
+.naomi-return-row {
+    max-width: 1060px;
+    margin: 0.4rem auto 1rem auto;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -900,6 +963,61 @@ st.markdown("""
         min-height: 108px !important;
         padding: 1.05rem 0.95rem !important;
     }
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+.st-key-mode_btn_1 button,
+.st-key-mode_btn_2 button,
+.st-key-mode_btn_3 button,
+.st-key-mode_btn_4 button {
+    background: #eef6ff !important;
+    border: 1px solid #d7e6f5 !important;
+    color: #52677f !important;
+    box-shadow: none !important;
+    border-radius: 18px !important;
+    font-weight: 500 !important;
+}
+.st-key-mode_btn_1 button:hover,
+.st-key-mode_btn_2 button:hover,
+.st-key-mode_btn_3 button:hover,
+.st-key-mode_btn_4 button:hover,
+.st-key-mode_btn_1 button:focus:not(:active),
+.st-key-mode_btn_2 button:focus:not(:active),
+.st-key-mode_btn_3 button:focus:not(:active),
+.st-key-mode_btn_4 button:focus:not(:active) {
+    background: #e4f1ff !important;
+    border-color: #bdd7ef !important;
+    color: #52677f !important;
+    box-shadow: 0 6px 18px rgba(120, 170, 210, 0.12) !important;
+}
+.st-key-mode_btn_1 button[kind="primary"],
+.st-key-mode_btn_2 button[kind="primary"],
+.st-key-mode_btn_3 button[kind="primary"],
+.st-key-mode_btn_4 button[kind="primary"],
+.st-key-mode_btn_1 button[data-testid="baseButton-primary"],
+.st-key-mode_btn_2 button[data-testid="baseButton-primary"],
+.st-key-mode_btn_3 button[data-testid="baseButton-primary"],
+.st-key-mode_btn_4 button[data-testid="baseButton-primary"] {
+    background: linear-gradient(180deg, #e8f4ff 0%, #dcefff 100%) !important;
+    border: 1px solid #9fc8ed !important;
+    color: #315f86 !important;
+    box-shadow: 0 8px 20px rgba(120, 170, 210, 0.18) !important;
+}
+.st-key-mode_btn_1 button[kind="primary"]:hover,
+.st-key-mode_btn_2 button[kind="primary"]:hover,
+.st-key-mode_btn_3 button[kind="primary"]:hover,
+.st-key-mode_btn_4 button[kind="primary"]:hover,
+.st-key-mode_btn_1 button[data-testid="baseButton-primary"]:hover,
+.st-key-mode_btn_2 button[data-testid="baseButton-primary"]:hover,
+.st-key-mode_btn_3 button[data-testid="baseButton-primary"]:hover,
+.st-key-mode_btn_4 button[data-testid="baseButton-primary"]:hover {
+    background: linear-gradient(180deg, #e8f4ff 0%, #dcefff 100%) !important;
+    border-color: #8dbde6 !important;
+    color: #315f86 !important;
+    box-shadow: 0 10px 24px rgba(120, 170, 210, 0.20) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1783,8 +1901,21 @@ with col_header_theme:
 with col_header_settings:
     st.markdown("<div style='padding-top: 0.8rem;'></div>", unsafe_allow_html=True)
     st.markdown('<div class="header-settings-control"></div>', unsafe_allow_html=True)
+    with st.popover("❓", use_container_width=False):
+        st.markdown("### Help")
+        st.markdown(f"**Pressure**  \n{naomi_help_text('pressure')}")
+        st.markdown(f"**Staff Note**  \n{naomi_help_text('staff_note')}")
+        st.markdown(f"**HumanState**  \n{naomi_help_text('human_state')}")
+        st.markdown(f"**Mode**  \n{naomi_help_text('mode')}")
+        st.markdown(f"**Intake Summary**  \n{naomi_help_text('intake_summary')}")
+        st.markdown(f"**Red Flag**  \n{naomi_help_text('red_flag')}")
     with st.popover("⚙", use_container_width=False):
         st.markdown(tr("### Internal State", "### 内部状態"))
+        st.markdown(f"**HumanState**  \n{naomi_help_text('human_state')}")
+        st.markdown(f"**Pressure**  \n{naomi_help_text('pressure')}")
+        st.markdown(f"**Mode**  \n{naomi_help_text('mode')}")
+        st.markdown(f"**Red Flag**  \n{naomi_help_text('red_flag')}")
+        st.divider()
         if st.session_state.last_result:
             detail_result = st.session_state.last_result[1]
             st.json({
@@ -1891,6 +2022,7 @@ if st.session_state.naomi_screen == "home":
     chat_bg = "rgba(255, 255, 255, 0.62)" if theme_mode == "light" else "rgba(13, 20, 35, 0.45)"
     chat_border = "rgba(106, 140, 175, 0.14)" if theme_mode == "light" else "rgba(197, 168, 128, 0.14)"
     chat_title = "#4f6f90" if theme_mode == "light" else "#c5a880"
+    st.markdown(f'<div class="naomi-return-row">{start_screen_link()}</div>', unsafe_allow_html=True)
     home_chat_intro = tr(
         "You can speak from here without choosing a menu.",
         "メニューを選ばなくても、ここからそのまま話せます。"
@@ -1986,6 +2118,7 @@ if st.session_state.naomi_screen == "home":
 
 # ── 🌿 NAOMIを使う方への静かな案内 ──
 st.markdown("<div id='naomi-menu-top' style='height: 1px;'></div>", unsafe_allow_html=True)
+st.markdown(f'<div class="naomi-return-row">{start_screen_link()}</div>', unsafe_allow_html=True)
 
 copy_title_color = "#2c3e50" if theme_mode == "light" else "#f1f5f9"
 copy_sub_color = "#475569" if theme_mode == "light" else "#cbd5e1"
@@ -2089,7 +2222,7 @@ with card_col1:
     """, unsafe_allow_html=True)
     
     btn_label_1 = t("btn_selected") if is_active_1 else t("btn_select")
-    if st.button(btn_label_1, key="mode_btn_1", use_container_width=True, type="primary" if is_active_1 else "secondary"):
+    if st.button(btn_label_1, key="mode_btn_1", use_container_width=True, type="primary" if is_active_1 else "secondary", help=naomi_help_text("mode")):
         switch_mode("🌙 少し疲れている")
 
     # ♿ 聞こえ方
@@ -2111,7 +2244,7 @@ with card_col1:
     """, unsafe_allow_html=True)
     
     btn_label_3 = t("btn_selected") if is_active_3 else t("btn_select")
-    if st.button(btn_label_3, key="mode_btn_3", use_container_width=True, type="primary" if is_active_3 else "secondary"):
+    if st.button(btn_label_3, key="mode_btn_3", use_container_width=True, type="primary" if is_active_3 else "secondary", help=naomi_help_text("mode")):
         switch_mode("♿ 入力を楽にしたい")
 
 with card_col2:
@@ -2133,7 +2266,7 @@ with card_col2:
     """, unsafe_allow_html=True)
     
     btn_label_2 = t("btn_selected") if is_active_2 else t("btn_select")
-    if st.button(btn_label_2, key="mode_btn_2", use_container_width=True, type="primary" if is_active_2 else "secondary"):
+    if st.button(btn_label_2, key="mode_btn_2", use_container_width=True, type="primary" if is_active_2 else "secondary", help=naomi_help_text("mode")):
         switch_mode("🧠 考えすぎている")
 
     # 🩺 整理したい
@@ -2155,7 +2288,7 @@ with card_col2:
     """, unsafe_allow_html=True)
     
     btn_label_4 = t("btn_selected") if is_active_4 else t("btn_select")
-    if st.button(btn_label_4, key="mode_btn_4", use_container_width=True, type="primary" if is_active_4 else "secondary"):
+    if st.button(btn_label_4, key="mode_btn_4", use_container_width=True, type="primary" if is_active_4 else "secondary", help=naomi_help_text("mode")):
         switch_mode("🩺 今の健康状態を一緒に整理しましょう")
 
 free_text_bg = "rgba(106, 140, 175, 0.045)" if theme_mode == "light" else "rgba(197, 168, 128, 0.06)"
@@ -2763,6 +2896,7 @@ if st.session_state.naomi_active_mode == "♿ 入力を楽にしたい":
 if st.session_state.naomi_active_mode == "🩺 今の健康状態を一緒に整理しましょう":
     health_section_title = "🩺 Let's gently organize your symptoms" if st.session_state.get("language", "JP") == "EN" else "🩺 今の健康状態を一緒に整理しましょう"
     st.markdown(f"### {health_section_title}")
+    st.markdown(f'<div class="naomi-return-row">{start_screen_link()}</div>', unsafe_allow_html=True)
     
     # はじめの案内
     guide_bg_clinic = "rgba(106, 140, 175, 0.05)" if theme_mode == "light" else "rgba(197, 168, 128, 0.05)"
@@ -3083,6 +3217,7 @@ if st.session_state.last_result and not suppress_bottom_chat:
             {visible_phase_label}
         </div>
         """, unsafe_allow_html=True)
+        naomi_help("mode")
         with st.expander("Debug", expanded=False):
             internal_state = getattr(result, "asurada_state", {}) or {}
             core_state = getattr(st.session_state.agent_core, "asurada", {}) or {}
@@ -3169,6 +3304,7 @@ if st.session_state.last_result and not suppress_bottom_chat:
         box_bg = "rgba(255, 255, 255, 0.65)" if theme_mode == "light" else "rgba(13, 20, 35, 0.45)"
         box_border = "rgba(255, 255, 255, 0.5)" if theme_mode == "light" else "rgba(197, 168, 128, 0.12)"
         summary_title_color = "#2c3e50" if theme_mode == "light" else "#f1f5f9"
+        naomi_help("intake_summary")
         st.markdown(f"""
         <div style="background-color: {box_bg}; padding: 2rem; border-radius: 24px; border: 1px solid {box_border}; margin-bottom: 2.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.02); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);">
             <h4 style="color: {summary_title_color}; margin-top: 0; font-family: 'Noto Serif JP', serif; letter-spacing: 0.05em;">{tr("📝 Current Note", "📝 今のメモ")}</h4>
@@ -3189,6 +3325,7 @@ if st.session_state.last_result and not suppress_bottom_chat:
         card_border = "rgba(255, 255, 255, 0.5)" if theme_mode == "light" else "rgba(197, 168, 128, 0.12)"
         title_c = "#2c3e50" if theme_mode == "light" else "#c5a880"
         text_c = "#34495e" if theme_mode == "light" else "#e2e8f0"
+        naomi_help("staff_note")
         
         # staff_note を美しくパース
         notes_html = ""
@@ -3230,6 +3367,13 @@ if st.session_state.last_result and not suppress_bottom_chat:
         box_bg = "rgba(255, 255, 255, 0.45)" if theme_mode == "light" else "rgba(13, 20, 35, 0.35)"
         box_border = "rgba(255, 255, 255, 0.5)" if theme_mode == "light" else "rgba(197, 168, 128, 0.12)"
         title_c = "#2c3e50" if theme_mode == "light" else "#c5a880"
+        state_help_cols = st.columns(3)
+        with state_help_cols[0]:
+            naomi_help("human_state")
+        with state_help_cols[1]:
+            naomi_help("pressure")
+        with state_help_cols[2]:
+            naomi_help("mode")
         
         stress_val = round(result.state.stress * 100)
         energy_val = round(result.state.energy * 100)

@@ -45,6 +45,12 @@ class NaomiAgentCore:
         """
         ユーザー入力を処理し、NAOMIの返答と内部状態を返す。
         """
+        if self._is_low_back_orthopedic_or_seikotsu_consult(text_input):
+            return self._process_low_back_orthopedic_guidance(text_input, profile)
+        if self._is_abdominal_pain_consult(text_input):
+            return self._process_abdominal_pain_guidance(text_input, profile)
+        if self._is_cold_fever_or_illness_consult(text_input):
+            return self._process_cold_fever_illness_guidance(text_input, profile)
         red_flag = self._detect_red_flag(text_input)
         if red_flag["triggered"]:
             return self._process_red_flag_input(text_input, red_flag, profile)
@@ -199,10 +205,16 @@ class NaomiAgentCore:
 
     def process_free_chat(self, text_input: str, profile: Optional[Dict] = None) -> AgentResponse:
         """Process open-ended home chat through the Asurada listening loop."""
+        if self._is_low_back_orthopedic_or_seikotsu_consult(text_input):
+            return self._process_low_back_orthopedic_guidance(text_input, profile)
+        if self._is_abdominal_pain_consult(text_input):
+            return self._process_abdominal_pain_guidance(text_input, profile)
+        if self._is_cold_fever_or_illness_consult(text_input):
+            return self._process_cold_fever_illness_guidance(text_input, profile)
         red_flag = self._detect_red_flag(text_input)
         if red_flag["triggered"]:
             return self._process_red_flag_input(text_input, red_flag, profile)
-        return self._process_asurada_input(text_input, profile)
+        return self._process_asurada_input(text_input, profile, free_chat=True)
 
     def process_accessibility_input(self, button_key: str, language: str = "JP") -> AgentResponse:
         """
@@ -428,6 +440,371 @@ class NaomiAgentCore:
         self.intake.history = []
         self.intake.red_flags = []
 
+    def _is_low_back_orthopedic_or_seikotsu_consult(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        back_pain_markers = [
+            "腰痛", "腰が痛", "腰痛い", "腰いた", "腰がいた", "腰の痛", "ぎっくり腰",
+            "lower back", "low back", "back pain",
+        ]
+        return any(marker in text or marker in lowered for marker in back_pain_markers)
+
+    def _low_back_red_flag_is_mentioned(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        red_flag_markers = [
+            "足のしびれ", "脚のしびれ", "下肢のしびれ", "しびれ",
+            "力が入りにくい", "力が入らない", "脱力",
+            "発熱", "熱がある", "尿", "便", "尿漏れ", "便漏れ", "出にくい",
+            "転倒", "倒れた", "強くぶつけた", "ぶつけた", "安静でも痛い", "悪化",
+            "numbness", "weakness", "fever", "urine", "bowel", "fall", "trauma", "worsening",
+        ]
+        return any(marker in text or marker in lowered for marker in red_flag_markers)
+
+    def _process_low_back_orthopedic_guidance(self, text_input: str, profile: Optional[Dict] = None) -> AgentResponse:
+        language = (profile or {}).get("language", "JP")
+        state = estimate_state(text_input)
+        state.physical_distress = max(state.physical_distress, 0.8)
+        state.need_listening = max(state.need_listening, 0.7)
+        state.need_advice = max(state.need_advice, 0.8)
+        has_red_flag_hint = self._low_back_red_flag_is_mentioned(text_input)
+
+        strategy = AgentStrategy(
+            advice_mode="ON",
+            listening_mode=True,
+            speech_density="LOW",
+            pause_length="LONG",
+            emotional_tone="Gentle",
+            goal="Low back pain safety guidance",
+            pressure_level="LOW",
+        )
+
+        if language == "EN":
+            text = (
+                "Your lower back hurts.\n"
+                "You may be wondering whether to go to an orthopedics clinic or a bodywork/bone-setting clinic.\n\n"
+                "First, I want to check gently.\n"
+                "Do you have leg numbness, weakness in the legs, fever, changes with urine or bowel movements, a fall, or a strong hit to your back?\n\n"
+                "If any of these are present, it is safer to check with orthopedics or a medical institution before a bodywork/bone-setting clinic.\n\n"
+                "Even without those signs, if this is a first strong back pain, pain that is lasting, worsening, or pain with an unclear cause, starting with orthopedics is the safer path.\n\n"
+                "A bodywork/bone-setting clinic is better considered as an option when dangerous signs do not seem present, especially for muscle or joint-area care after the situation has been checked."
+            )
+        else:
+            text = (
+                "腰が痛いんですね。\n"
+                "整形外科に行くか、整骨院に行くかで迷っているんですね。\n\n"
+                "まず確認したいです。\n"
+                "足のしびれや力の入りにくさ、発熱、尿や便の出にくさ、転倒や強くぶつけた心当たりはありますか？\n\n"
+                "もしある場合は、整骨院より先に整形外科や医療機関で確認した方が安心です。\n\n"
+                "そういった症状がなくても、初めての強い腰痛、長引いている腰痛、原因がよく分からない痛みなら、まず整形外科で状態を見てもらうのが安全です。\n\n"
+                "整骨院は、危ない症状がなさそうで、筋肉や関節まわりのケアを受けたい時の選択肢として考えるのがよさそうです。"
+            )
+
+        contract = {
+            "phase": "SAFETY_GUIDANCE",
+            "red_flag": {
+                "triggered": has_red_flag_hint,
+                "category": "low_back_pain_red_flag_check" if has_red_flag_hint else None,
+            },
+            "problem_type": "health",
+            "next_action_hint": "迷ったら整形外科を優先",
+        }
+
+        return AgentResponse(
+            text=text,
+            state=state,
+            mode=Mode.GENTLE_GUIDANCE,
+            strategy=strategy,
+            pressure_level="LOW",
+            red_flags=(
+                [{"label": "腰痛の危険サイン確認", "level": "high"}]
+                if has_red_flag_hint else []
+            ),
+            red_flag=contract["red_flag"],
+            asurada_state=contract,
+        )
+
+    def _is_abdominal_pain_consult(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        abdominal_markers = [
+            "お腹痛", "おなか痛", "腹痛", "腹が痛", "胃が痛", "胃痛",
+            "下腹部が痛", "みぞおちが痛", "右下腹部が痛", "お腹が張", "おなかが張",
+            "吐き気", "吐いた", "嘔吐", "下痢", "血便", "黒い便", "吐血",
+            "便やガスが出ない", "水分が取れない", "水分取れない",
+            "stomach pain", "abdominal pain", "belly pain", "nausea", "vomit",
+            "diarrhea", "bloody stool", "black stool", "vomiting blood",
+        ]
+        return any(marker in text or marker in lowered for marker in abdominal_markers)
+
+    def _abdominal_pain_red_flag_is_mentioned(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        red_flag_markers = [
+            "我慢できない", "強い腹痛", "激しい腹痛", "動けない", "どんどん悪化", "悪化している",
+            "発熱", "熱がある", "嘔吐が止まらない", "吐き気が止まらない", "吐き続け",
+            "水分が取れない", "水分取れない", "飲めない", "尿が少ない",
+            "血便", "便に血", "黒い便", "真っ黒い便", "吐血", "血を吐",
+            "お腹が強く張", "おなかが強く張", "便やガスが出ない", "ガスが出ない",
+            "意識がぼんやり", "意識がもうろう", "冷や汗", "右下腹部が痛", "右下腹部の強い痛",
+            "妊娠", "妊娠中", "妊娠の可能性", "高齢", "持病", "子ども", "子供", "乳児", "赤ちゃん",
+            "severe abdominal pain", "severe stomach pain", "cannot move", "worsening",
+            "fever", "can't stop vomiting", "cannot drink", "can't drink", "little urine",
+            "bloody stool", "black stool", "vomiting blood", "confused", "cold sweat",
+            "pregnant", "elderly", "chronic illness", "child", "baby", "infant",
+        ]
+        return any(marker in text or marker in lowered for marker in red_flag_markers)
+
+    def _abdominal_child_context_is_mentioned(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        child_markers = ["子ども", "子供", "こども", "赤ちゃん", "乳児", "幼児", "小児", "息子", "娘", "child", "baby", "infant", "toddler"]
+        return any(marker in text or marker in lowered for marker in child_markers)
+
+    def _abdominal_higher_risk_context_is_mentioned(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        higher_risk_markers = [
+            "高齢", "年寄り", "母", "父", "祖母", "祖父", "持病", "基礎疾患",
+            "妊娠", "妊婦", "妊娠中", "妊娠の可能性",
+            "elderly", "older", "chronic illness", "underlying condition", "pregnant",
+        ]
+        return any(marker in text or marker in lowered for marker in higher_risk_markers)
+
+    def _process_abdominal_pain_guidance(self, text_input: str, profile: Optional[Dict] = None) -> AgentResponse:
+        language = (profile or {}).get("language", "JP")
+        state = estimate_state(text_input)
+        state.physical_distress = max(state.physical_distress, 0.85)
+        state.need_listening = max(state.need_listening, 0.7)
+        state.need_advice = max(state.need_advice, 0.8)
+        has_red_flag_hint = self._abdominal_pain_red_flag_is_mentioned(text_input)
+        child_context = self._abdominal_child_context_is_mentioned(text_input)
+        higher_risk_context = self._abdominal_higher_risk_context_is_mentioned(text_input)
+
+        strategy = AgentStrategy(
+            advice_mode="ON",
+            listening_mode=True,
+            speech_density="LOW",
+            pause_length="LONG",
+            emotional_tone="Gentle",
+            goal="Abdominal pain safety guidance",
+            pressure_level="LOW",
+        )
+
+        if language == "EN":
+            urgent_line = (
+                "What you wrote may include a warning sign. If there is severe pain, bloody or black stool, vomiting blood, vomiting that will not stop, trouble drinking fluids, confusion, or rapidly worsening pain, it is safer to contact a medical institution, urgent consultation line, or emergency care rather than waiting."
+                if has_red_flag_hint
+                else "If there is severe pain, bloody or black stool, vomiting blood, vomiting that will not stop, trouble drinking fluids, confusion, or rapidly worsening pain, it is safer to contact a medical institution, urgent consultation line, or emergency care."
+            )
+            extra_lines = []
+            if child_context:
+                extra_lines.append("If this is about a child or infant, strong abdominal pain, vomiting, bloody stool, or trouble drinking fluids is a reason to check with a medical institution or consultation line earlier.")
+            if higher_risk_context:
+                extra_lines.append("For older adults, people with chronic conditions, or someone who is pregnant or may be pregnant, earlier medical consultation is the safer path.")
+            extra = ("\n\n" + "\n".join(extra_lines)) if extra_lines else ""
+            text = (
+                "Your stomach hurts.\n"
+                "Let me gently check the situation first.\n\n"
+                "Is the pain too strong to tolerate?\n"
+                "Do you have nausea or vomiting, fever, diarrhea, bloody stool, or black stool?\n"
+                "Can you drink fluids?\n"
+                "Do you feel strong bloating, no stool or gas, cold sweat, or confusion?\n\n"
+                f"{urgent_line}\n\n"
+                "Even if those do not apply, it is okay to seek care if the pain continues, gets worse, or feels unusually worrying.\n\n"
+                "You do not have to decide by yourself. We can organize where it hurts and when it started."
+                f"{extra}"
+            )
+        else:
+            urgent_line = (
+                "今の入力には、腹痛の危険サインに近いものが含まれている可能性があります。強い痛み、血便、黒い便、吐血、嘔吐が止まらない、水分が取れない、意識がぼんやりする感じがある場合は、我慢せず医療機関や救急相談、必要に応じて救急外来へ連絡した方が安心です。"
+                if has_red_flag_hint
+                else "もし強い痛み、血便、黒い便、吐血、嘔吐が止まらない、水分が取れない、意識がぼんやりする感じがある場合は、我慢せず医療機関や救急相談に連絡した方が安心です。"
+            )
+            extra_lines = []
+            if child_context:
+                extra_lines.append("子どもや乳児の場合は、強い腹痛、嘔吐、血便、水分が取れない様子がある時は、早めに医療機関や相談窓口へ確認した方が安心です。")
+            if higher_risk_context:
+                extra_lines.append("高齢の方、持病がある方、妊娠中または妊娠の可能性がある方は、早めに医療機関へ相談した方が安心です。")
+            extra = ("\n\n" + "\n".join(extra_lines)) if extra_lines else ""
+            text = (
+                "お腹が痛いんですね。まず、今の状態を少しだけ確認させてください。\n\n"
+                "痛みは我慢できないほど強いですか？\n"
+                "吐き気や嘔吐、発熱、下痢、血便や黒い便はありますか？\n"
+                "水分は取れていますか？\n"
+                "お腹が強く張っている、便やガスが出ない、冷や汗が出る、意識がぼんやりする感じはありますか？\n\n"
+                f"{urgent_line}\n\n"
+                "当てはまらなくても、痛みが続く、悪化している、いつもと違って不安が強い場合は、早めに受診を考えて大丈夫です。\n\n"
+                "無理に自分だけで判断しきらなくて大丈夫です。痛む場所や、いつから痛いかを一緒に整理していきましょう。"
+                f"{extra}"
+            )
+
+        contract = {
+            "phase": "ABDOMINAL_SAFETY_GUIDANCE",
+            "red_flag": {
+                "triggered": has_red_flag_hint,
+                "category": "abdominal_pain_red_flag_check" if has_red_flag_hint else None,
+            },
+            "problem_type": "health",
+            "next_action_hint": "腹痛の危険サインがあれば医療機関や救急相談を優先",
+            "child_context": child_context,
+            "higher_risk_context": higher_risk_context,
+        }
+
+        return AgentResponse(
+            text=text,
+            state=state,
+            mode=Mode.GENTLE_GUIDANCE,
+            strategy=strategy,
+            pressure_level="LOW",
+            red_flags=(
+                [{"label": "腹痛の危険サイン確認", "level": "high"}]
+                if has_red_flag_hint else []
+            ),
+            red_flag=contract["red_flag"],
+            asurada_state=contract,
+        )
+
+    def _is_cold_fever_or_illness_consult(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        illness_markers = [
+            "風邪", "かぜ", "熱がある", "熱出", "熱を出", "発熱", "高熱",
+            "体調が悪", "体調悪", "体調不良", "具合が悪", "具合悪",
+            "だるい", "だるく", "喉が痛", "のどが痛", "咳", "せき", "鼻水",
+            "頭がぼー", "ぼーっと", "病院に行", "受診", "医者に行", "医療機関",
+            "水分が取れない", "水分取れない", "息苦しい", "胸の痛み",
+            "cold", "fever", "sick", "unwell", "cough", "sore throat", "runny nose",
+            "see a doctor", "go to hospital", "go to the hospital", "medical",
+            "short of breath", "chest pain", "can't drink", "cannot drink",
+        ]
+        return any(marker in text or marker in lowered for marker in illness_markers)
+
+    def _cold_fever_red_flag_is_mentioned(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        red_flag_markers = [
+            "息苦しい", "息が苦しい", "息ができない", "呼吸が苦しい", "呼吸困難",
+            "胸の痛み", "胸が痛い", "意識がぼんやり", "意識がもうろう", "意識が遠い",
+            "ぐったり", "水分が取れない", "水分取れない", "飲めない", "尿が少ない",
+            "高熱が続", "熱が続", "急に悪化", "悪化している", "強い頭痛", "激しい頭痛",
+            "強い腹痛", "激しい腹痛", "強い喉の痛み", "喉がすごく痛い",
+            "short of breath", "cannot breathe", "chest pain", "confused", "drowsy",
+            "can't drink", "cannot drink", "little urine", "high fever", "worsening",
+            "severe headache", "severe stomach pain", "severe sore throat",
+        ]
+        return any(marker in text or marker in lowered for marker in red_flag_markers)
+
+    def _cold_fever_child_context_is_mentioned(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        child_markers = [
+            "子ども", "子供", "こども", "赤ちゃん", "乳児", "幼児", "小児", "息子", "娘",
+            "child", "baby", "infant", "toddler",
+        ]
+        return any(marker in text or marker in lowered for marker in child_markers)
+
+    def _cold_fever_higher_risk_context_is_mentioned(self, text_input: str) -> bool:
+        text = text_input or ""
+        lowered = text.lower()
+        higher_risk_markers = [
+            "高齢", "年寄り", " elderly", "母", "父", "祖母", "祖父",
+            "持病", "基礎疾患", "妊娠", "妊婦", "妊娠中",
+            "elderly", "older", "chronic illness", "underlying condition", "pregnant",
+        ]
+        return any(marker in text or marker in lowered for marker in higher_risk_markers)
+
+    def _process_cold_fever_illness_guidance(self, text_input: str, profile: Optional[Dict] = None) -> AgentResponse:
+        language = (profile or {}).get("language", "JP")
+        state = estimate_state(text_input)
+        state.physical_distress = max(state.physical_distress, 0.8)
+        state.need_listening = max(state.need_listening, 0.7)
+        state.need_advice = max(state.need_advice, 0.8)
+        has_red_flag_hint = self._cold_fever_red_flag_is_mentioned(text_input)
+        child_context = self._cold_fever_child_context_is_mentioned(text_input)
+        higher_risk_context = self._cold_fever_higher_risk_context_is_mentioned(text_input)
+
+        strategy = AgentStrategy(
+            advice_mode="ON",
+            listening_mode=True,
+            speech_density="LOW",
+            pause_length="LONG",
+            emotional_tone="Gentle",
+            goal="Cold fever illness safety guidance",
+            pressure_level="LOW",
+        )
+
+        if language == "EN":
+            extra_lines = []
+            urgent_line = (
+                "What you wrote may include one of those warning signs, so it is safer to contact a medical institution, an urgent consultation line, or emergency care rather than waiting."
+                if has_red_flag_hint
+                else "If any of these apply, it is safer not to wait. Please consider contacting a medical institution, an urgent care/emergency consultation line, or emergency care."
+            )
+            if child_context:
+                extra_lines.append("If this is about a child or infant, it is safer to check with a medical institution or consultation line earlier rather than treating it like an adult case.")
+            if higher_risk_context:
+                extra_lines.append("For older adults, people with chronic conditions, or someone who is pregnant, earlier medical consultation is the safer path.")
+            extra = ("\n\n" + "\n".join(extra_lines)) if extra_lines else ""
+            text = (
+                "You are feeling unwell.\n"
+                "It sounds hard enough that you are wondering whether to seek medical care.\n\n"
+                "First, I want to check gently.\n"
+                "Do you have shortness of breath, chest pain, confusion or unusual drowsiness, trouble drinking fluids, very little urine, a high fever that continues, sudden worsening, severe headache, severe stomach pain, or severe throat pain?\n\n"
+                f"{urgent_line}\n\n"
+                "Even if none apply, it is okay to seek care if fever or fatigue continues, symptoms are worsening, you cannot eat or drink well, or you feel unusually worried.\n\n"
+                "You do not have to decide perfectly right now. We can gently organize the symptoms and think about whether to consult someone."
+                f"{extra}"
+            )
+        else:
+            extra_lines = []
+            urgent_line = (
+                "今の入力には、危険サインに近いものが含まれている可能性があります。待ちすぎず、医療機関や救急相談、必要に応じて救急外来へ連絡した方が安心です。"
+                if has_red_flag_hint
+                else "もし当てはまるものがある場合は、我慢せず医療機関や救急相談に連絡した方が安心です。"
+            )
+            if child_context:
+                extra_lines.append("子どもや乳児の場合は、大人向けと同じように考えすぎず、早めに医療機関や相談窓口へ確認した方が安心です。")
+            if higher_risk_context:
+                extra_lines.append("高齢の方、持病がある方、妊娠中の方は、早めに医療機関へ相談した方が安心です。")
+            extra = ("\n\n" + "\n".join(extra_lines)) if extra_lines else ""
+            text = (
+                "体調が悪いんですね。\n"
+                "病院に行くべきか迷うくらい、つらさがあるんですね。\n\n"
+                "まず確認したいです。\n"
+                "息苦しさ、胸の痛み、意識がぼんやりする感じ、ぐったりしている感じ、水分が取れない、尿が少ない、高い熱が続いている、急に悪化している感じ、強い頭痛や腹痛、強い喉の痛みはありますか？\n\n"
+                f"{urgent_line}\n\n"
+                "当てはまらなくても、熱やだるさが続く、食事や水分が取れない、いつもと違って不安が強い場合は、早めに受診を考えて大丈夫です。\n\n"
+                "今は無理に判断しきらなくて大丈夫です。症状を少し整理して、受診するか一緒に考えましょう。"
+                f"{extra}"
+            )
+
+        contract = {
+            "phase": "ILLNESS_SAFETY_GUIDANCE",
+            "red_flag": {
+                "triggered": has_red_flag_hint,
+                "category": "cold_fever_illness_red_flag_check" if has_red_flag_hint else None,
+            },
+            "problem_type": "health",
+            "next_action_hint": "危険サインがあれば医療機関や救急相談を優先",
+            "child_context": child_context,
+            "higher_risk_context": higher_risk_context,
+        }
+
+        return AgentResponse(
+            text=text,
+            state=state,
+            mode=Mode.GENTLE_GUIDANCE,
+            strategy=strategy,
+            pressure_level="LOW",
+            red_flags=(
+                [{"label": "体調不良の危険サイン確認", "level": "high"}]
+                if has_red_flag_hint else []
+            ),
+            red_flag=contract["red_flag"],
+            asurada_state=contract,
+        )
+
     def _detect_red_flag(self, text_input: str) -> Dict[str, Any]:
         text = (text_input or "").strip()
         lowered = text.lower()
@@ -563,7 +940,10 @@ class NaomiAgentCore:
         lowered = text_input.lower()
         return any(marker in lowered for marker in markers)
 
-    def _process_asurada_input(self, text_input: str, profile: Optional[Dict] = None) -> AgentResponse:
+    def _process_asurada_input(self, text_input: str, profile: Optional[Dict] = None, free_chat: bool = False) -> AgentResponse:
+        if free_chat:
+            return self._process_asurada_free_chat_input(text_input, profile)
+
         state = estimate_state(text_input)
         strategy = AgentStrategy(
             advice_mode="WAIT",
@@ -663,6 +1043,174 @@ class NaomiAgentCore:
             pressure_level="LOW",
             asurada_state=contract,
         )
+
+    def _process_asurada_free_chat_input(self, text_input: str, profile: Optional[Dict] = None) -> AgentResponse:
+        state = estimate_state(text_input)
+        strategy = AgentStrategy(
+            advice_mode="WAIT",
+            listening_mode=True,
+            speech_density="LOW",
+            pause_length="LONG",
+            emotional_tone="Gentle",
+            goal="Low-pressure free chat state organization",
+            pressure_level="LOW",
+        )
+        language = (profile or {}).get("language", "JP")
+        text = text_input.strip()
+
+        if self.asurada.get("completed"):
+            self.asurada = self._new_asurada_context()
+
+        self.asurada.setdefault("inputs", []).append(text)
+        self._asurada_update_structured_state(text)
+        if self._asurada_user_requested_advice(text):
+            self.asurada["pending_user_requested"] = True
+
+        phase = self.asurada.get("phase", "LISTEN")
+        empathy = ""
+        question = ""
+        state_summary = ""
+        advice = ""
+
+        if phase == "LISTEN":
+            response_text, question = self._asurada_free_chat_opening(text, language)
+            empathy = response_text
+            self.asurada["probe_count"] = 1
+            self.asurada["next_question"] = question
+            self.asurada["phase"] = "PROBE"
+        elif phase == "PROBE":
+            if self.asurada.get("probe_count", 0) >= 2 or self.asurada.get("pending_user_requested"):
+                state_summary = self._asurada_free_chat_summary(language)
+                response_text = state_summary
+                self.asurada["phase"] = "ADVISE"
+                self.asurada["completed"] = True
+            else:
+                question = self._asurada_free_chat_followup(language)
+                self.asurada["probe_count"] = min(self.asurada.get("probe_count", 0) + 1, 2)
+                self.asurada["next_question"] = question
+                self.asurada["phase"] = "ORGANIZE"
+                response_text = question
+        elif phase == "ORGANIZE":
+            state_summary = self._asurada_free_chat_summary(language)
+            response_text = state_summary
+            self.asurada["phase"] = "ADVISE"
+            self.asurada["completed"] = True
+        else:
+            advice = self._asurada_advice(language)
+            response_text = advice
+            self.asurada["completed"] = True
+
+        contract = {
+            "phase": phase,
+            "empathy": empathy,
+            "question": question,
+            "state_summary": state_summary,
+            "advice": advice,
+            "problem_type": self.asurada.get("problem_type"),
+            "known_facts": list(self.asurada.get("known_facts", [])),
+            "missing_info": list(self.asurada.get("missing_info", [])),
+            "missing_info_initialized_for": self.asurada.get("missing_info_initialized_for"),
+            "next_question": self.asurada.get("next_question"),
+            "last_question_key": self.asurada.get("last_question_key"),
+            "probe_count": self.asurada.get("probe_count", 0),
+        }
+
+        return AgentResponse(
+            text=response_text,
+            state=state,
+            mode=Mode.LISTENING_FIRST,
+            strategy=strategy,
+            pressure_level="LOW",
+            asurada_state=contract,
+        )
+
+    def _asurada_free_chat_opening(self, text: str, language: str) -> tuple[str, str]:
+        if language == "EN":
+            question = "What feels most important to sort out first: the situation itself, or how it is affecting you right now?"
+            return (
+                "Thank you for telling me.\nYou do not have to solve it all at once. Let's organize just one small part first.\n\n"
+                + question,
+                question,
+            )
+
+        if self._asurada_contains_any(text, ["お腹", "腹痛", "吐き気", "吐いた"]):
+            question = (
+                "お腹の痛みは、キリキリする感じですか？\n"
+                "それとも、重たい・張るような感じですか？\n\n"
+                "吐き気は、実際に吐いてしまいましたか？\n"
+                "それとも、気持ち悪さが続いている状態でしょうか？"
+            )
+            return f"つらいですね。\nまず、今の状態を少しだけ一緒に整理しましょう。\n\n{question}", question
+
+        if self._asurada_contains_any(text, ["頭痛", "頭が痛", "頭痛い"]):
+            question = (
+                "頭の痛みは、ズキズキする感じですか？\n"
+                "それとも、締めつけられる感じですか？"
+            )
+            return f"頭の痛みがあるうえに不安もあると、落ち着きにくいですね。\nここでは診断はせず、今の状態を伝えやすくするために整理します。\n\n{question}", question
+
+        if self._asurada_contains_any(text, ["眠れない", "眠れません", "寝られない", "寝れない"]):
+            question = (
+                "眠れないのは、考えごとが止まらない感じですか？\n"
+                "それとも、体が休まらない感じですか？"
+            )
+            return f"眠れない時間は長く感じられて、しんどいですね。\n今すぐ解決しようとしなくて大丈夫です。まず、休みにくさを少しだけ見てみましょう。\n\n{question}", question
+
+        if self._asurada_contains_any(text, ["仕事", "職場", "会社"]):
+            question = (
+                "今日つらかったのは、仕事の量が多かったことですか？\n"
+                "それとも、気を張り続けたことですか？"
+            )
+            return f"忙しい中で、かなり気を張ってきた感じがありますね。\n急いで答えを出さなくて大丈夫です。まず、今の負担を少しだけ整理しましょう。\n\n{question}", question
+
+        if self._asurada_contains_any(text, ["疲れ", "疲れて", "疲労", "だるい", "しんどい", "気力がない"]):
+            question = (
+                "その疲れは、体の疲れに近いですか？\n"
+                "それとも、気持ちの疲れに近いですか？"
+            )
+            return f"それは大変でしたね。\nここでは急いで整理しなくて大丈夫です。今の疲れを、少しだけ分けて見てみましょう。\n\n{question}", question
+
+        if self._asurada_contains_any(text, ["不安", "怖い", "心配", "落ち着かない", "考えすぎ"]):
+            question = (
+                "その不安は、これから起きることへの不安ですか？\n"
+                "それとも、今すでに抱えていることへの不安ですか？"
+            )
+            return f"それは不安になりますね。\nすぐに答えを出さなくて大丈夫です。今感じていることを、少しずつ整理しましょう。\n\n{question}", question
+
+        question = (
+            "今いちばん整理したいのは、起きている出来事ですか？\n"
+            "それとも、そのことで感じている気持ちですか？"
+        )
+        return f"話してくれてありがとうございます。\nここでは急がなくて大丈夫です。今の状態を、少しずつ一緒に整理していきましょう。\n\n{question}", question
+
+    def _asurada_free_chat_followup(self, language: str) -> str:
+        if language == "EN":
+            return "What is making daily life hardest right now? A short answer is enough."
+        if self.asurada.get("problem_type") == "health":
+            return "今の状態で、日常生活の中で特に困っていることはありますか？\n短くで大丈夫です。"
+        if self.asurada.get("problem_type") == "fatigue":
+            return "最近、少しでも休める時間は取れていますか？\n取れていないなら、取れない理由だけでも大丈夫です。"
+        if self.asurada.get("problem_type") == "anxiety":
+            return "今の不安の強さは、低い・中くらい・高いでいうと、どれに近いですか？"
+        if self.asurada.get("problem_type") == "loneliness":
+            return "今は、誰かに聞いてほしい感じですか？\nそれとも、ただ一人ではない感じが少しほしいですか？"
+        return "今いちばん重く感じているところを、ひとつだけ挙げるなら何でしょうか？"
+
+    def _asurada_free_chat_summary(self, language: str) -> str:
+        inputs = [item for item in self.asurada.get("inputs", [])[:4] if item]
+        if language == "EN":
+            lines = ["Here is what I understand so far:"]
+            lines.extend(f"- {item}" for item in inputs)
+            lines.append("You do not have to decide what to do immediately. If helpful, we can move this into a short state-organizing note.")
+            return "\n".join(lines)
+        lines = ["ここまでを短く整理すると、"]
+        lines.extend(f"・{item}" for item in inputs)
+        lines.append("という状態に近そうです。")
+        lines.append("まだ結論を出さなくて大丈夫です。必要なら、このまま状態整理や体調整理としてメモにできます。")
+        return "\n".join(lines)
+
+    def _asurada_contains_any(self, text: str, words: List[str]) -> bool:
+        return any(word in text for word in words)
 
     def _asurada_user_requested_advice(self, text: str) -> bool:
         if any(marker in text for marker in ["どうしたら", "どうすれば", "アドバイス", "助言", "教えて"]):
