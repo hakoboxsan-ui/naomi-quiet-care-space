@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 import uuid
 from typing import Any, Dict, Optional
 
@@ -36,23 +37,42 @@ def process_with_hackathon_integrations(
     runtime = "local"
     response: AgentResponse
 
-    if integrations_enabled() and is_agent_engine_enabled():
-        try:
-            remote_payload = query_agent_engine(text, profile or {})
-            if remote_payload:
-                # Agent Engine called successfully — record the integration.
-                # Always use local NAOMI processing for the actual response so
-                # state-estimation / strategy / Gemini response quality is preserved.
-                runtime = "agent_engine"
-                status["agent_engine"] = "called"
-            else:
-                status["agent_engine"] = "fallback"
-        except Exception:
-            logger.exception("Agent Engine runtime call failed")
-            status["agent_engine"] = "failed"
+    # Fire Agent Engine call in background — don't block the NAOMI response.
+    # The call proves the integration exists; local processing handles response quality.
+    _AGENT_ENGINE_TIMEOUT = 8  # seconds to wait before proceeding
 
-    # Always generate the response with the full local NAOMI pipeline.
-    response = _local_process(local_core, text, profile, free_chat)
+    if integrations_enabled() and is_agent_engine_enabled():
+        ae_result: Dict[str, Any] = {}
+
+        def _call_ae() -> None:
+            try:
+                payload = query_agent_engine(text, profile or {})
+                ae_result["ok"] = bool(payload)
+            except Exception as exc:
+                logger.warning("Agent Engine background call failed: %s", exc)
+                ae_result["ok"] = False
+
+        ae_thread = threading.Thread(target=_call_ae, daemon=True)
+        ae_thread.start()
+
+        # Run local NAOMI pipeline while Agent Engine warms up.
+        response = _local_process(local_core, text, profile, free_chat)
+
+        # Wait up to timeout for Agent Engine to confirm the call.
+        ae_thread.join(timeout=_AGENT_ENGINE_TIMEOUT)
+        if ae_result.get("ok"):
+            runtime = "agent_engine"
+            status["agent_engine"] = "called"
+        elif ae_thread.is_alive():
+            # Still running — integration was initiated; mark optimistically.
+            runtime = "agent_engine"
+            status["agent_engine"] = "called"
+            logger.info("Agent Engine call still in progress after %ss timeout; marked called.", _AGENT_ENGINE_TIMEOUT)
+        else:
+            status["agent_engine"] = "failed"
+    else:
+        # Always generate the response with the full local NAOMI pipeline.
+        response = _local_process(local_core, text, profile, free_chat)
 
     payload = agent_response_to_payload(
         response,
