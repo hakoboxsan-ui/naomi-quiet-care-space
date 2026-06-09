@@ -49,27 +49,51 @@ class GeminiBrain:
             self.model = None
 
     def _call_gemini(self, prompt: str) -> Optional[str]:
-        """Gemini APIを呼び出す内部メソッド。モデルが見つからない場合はフォールバックを試みる。"""
-        if not self.is_available or not self.model:
-            return None
+        """Gemini APIを呼び出す内部メソッド。AI Studio失敗時はVertex AIにフォールバック。"""
+        # Try Google AI Studio first (if key is set)
+        if self.is_available and self.model:
+            candidates = [self.model_name] + [m for m in self._MODEL_FALLBACKS if m != self.model_name]
+            for name in candidates:
+                try:
+                    if name != self.model_name:
+                        self.model = genai.GenerativeModel(name)
+                        self.model_name = name
+                    response = self.model.generate_content(prompt)
+                    return response.text
+                except Exception as e:
+                    err_str = str(e)
+                    if any(x in err_str for x in ["404", "not found", "not supported", "429", "quota", "RESOURCE_EXHAUSTED"]):
+                        logger.warning(f"Gemini AI Studio {name} unavailable ({err_str[:80]}), trying next...")
+                        continue
+                    logger.error(f"Gemini API Error: {e}")
+                    break  # non-quota error, don't retry
 
-        # Try current model first, then fall back through candidates
-        candidates = [self.model_name] + [m for m in self._MODEL_FALLBACKS if m != self.model_name]
-        for name in candidates:
-            try:
-                if name != self.model_name:
-                    self.model = genai.GenerativeModel(name)
-                    self.model_name = name
-                response = self.model.generate_content(prompt)
-                return response.text
-            except Exception as e:
-                err_str = str(e)
-                if "404" in err_str or "not found" in err_str.lower() or "not supported" in err_str.lower():
-                    logger.warning(f"Gemini model {name} not available, trying next...")
+        # Fallback: Vertex AI Gemini (uses ADC — no API key needed)
+        return self._call_gemini_via_vertex(prompt)
+
+    def _call_gemini_via_vertex(self, prompt: str) -> Optional[str]:
+        """Vertex AI 経由でGeminiを呼び出す（ADC使用、AI Studio無料枠制限を受けない）。"""
+        try:
+            import vertexai
+            from vertexai.generative_models import GenerativeModel as VertexGenerativeModel
+            project = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT")
+            location = os.getenv("GOOGLE_CLOUD_LOCATION") or os.getenv("GOOGLE_CLOUD_REGION") or "us-central1"
+            if project:
+                vertexai.init(project=project, location=location)
+            vertex_model_names = ["gemini-2.0-flash-001", "gemini-2.0-flash", "gemini-1.5-flash-001", "gemini-1.5-flash"]
+            for vname in vertex_model_names:
+                try:
+                    vm = VertexGenerativeModel(vname)
+                    response = vm.generate_content(prompt)
+                    logger.info(f"Gemini via Vertex AI ({vname}) succeeded.")
+                    # Mark as available for next calls
+                    self.is_available = True
+                    return response.text
+                except Exception as ve:
+                    logger.warning(f"Vertex AI model {vname} failed: {ve}")
                     continue
-                logger.error(f"Gemini API Error: {e}")
-                return None
-        logger.error("All Gemini model candidates failed.")
+        except Exception as e:
+            logger.error(f"Vertex AI Gemini fallback failed: {e}")
         return None
 
     def analyze_human_state(self, text: str, profile: Optional[Dict] = None) -> Optional[Dict[str, float]]:
