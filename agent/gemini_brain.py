@@ -31,7 +31,16 @@ else:
 class GeminiBrain:
     """NAOMIの思考・理解エンジン。Gemini APIを使用して高度な状態推定と応答生成を行う。"""
     
-    def __init__(self, model_name: str = "gemini-1.5-flash"):
+    # Model name candidates tried in order when the primary fails
+    _MODEL_FALLBACKS = [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-exp",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash",
+        "gemini-pro",
+    ]
+
+    def __init__(self, model_name: str = "gemini-2.0-flash"):
         self.model_name = model_name
         self.is_available = bool(API_KEY and genai)
         if self.is_available:
@@ -40,16 +49,28 @@ class GeminiBrain:
             self.model = None
 
     def _call_gemini(self, prompt: str) -> Optional[str]:
-        """Gemini APIを呼び出す内部メソッド。"""
+        """Gemini APIを呼び出す内部メソッド。モデルが見つからない場合はフォールバックを試みる。"""
         if not self.is_available or not self.model:
             return None
-        
-        try:
-            response = self.model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            logger.error(f"Gemini API Error: {e}")
-            return None
+
+        # Try current model first, then fall back through candidates
+        candidates = [self.model_name] + [m for m in self._MODEL_FALLBACKS if m != self.model_name]
+        for name in candidates:
+            try:
+                if name != self.model_name:
+                    self.model = genai.GenerativeModel(name)
+                    self.model_name = name
+                response = self.model.generate_content(prompt)
+                return response.text
+            except Exception as e:
+                err_str = str(e)
+                if "404" in err_str or "not found" in err_str.lower() or "not supported" in err_str.lower():
+                    logger.warning(f"Gemini model {name} not available, trying next...")
+                    continue
+                logger.error(f"Gemini API Error: {e}")
+                return None
+        logger.error("All Gemini model candidates failed.")
+        return None
 
     def analyze_human_state(self, text: str, profile: Optional[Dict] = None) -> Optional[Dict[str, float]]:
         """ユーザーのテキストから人間状態を推定する。"""

@@ -110,4 +110,73 @@ def _mcp_env() -> Dict[str, str]:
 
 
 def _tool_names(tools_result: Any) -> List[str]:
-    tools = getattr(tools_result, "tools", tools_resu
+    tools = getattr(tools_result, "tools", tools_result)
+    names = []
+    for tool in tools or []:
+        name = getattr(tool, "name", None)
+        if name:
+            names.append(name)
+        elif isinstance(tool, dict) and tool.get("name"):
+            names.append(str(tool["name"]))
+    return names
+
+
+def _select_tool(tool_names: List[str]) -> str:
+    # 1. Respect explicit env override
+    requested = os.getenv("ARIZE_MCP_TOOL_NAME")
+    if requested and requested in tool_names:
+        return requested
+    if requested:
+        logger.warning("ARIZE_MCP_TOOL_NAME=%s not in available tools: %s", requested, tool_names)
+    # 2. Try read-type candidates first (safer — no required args usually)
+    for candidate in TOOL_CANDIDATES_READ:
+        if candidate in tool_names:
+            return candidate
+    # 3. Try write-type candidates
+    for candidate in TOOL_CANDIDATES_WRITE:
+        if candidate in tool_names:
+            return candidate
+    # 4. Last resort: pick first available tool
+    if tool_names:
+        logger.info("No known candidate matched; using first available tool: %s", tool_names[0])
+        return tool_names[0]
+    return ""
+
+
+def _build_call_args(tool_name: str, fallback_payload: Dict[str, Any], tools_result: Any) -> Dict[str, Any]:
+    """Build safe arguments for call_tool based on the tool's input schema."""
+    # Inspect schema to find required fields
+    tools = getattr(tools_result, "tools", tools_result) or []
+    for tool in tools:
+        name = getattr(tool, "name", None)
+        if name != tool_name:
+            continue
+        schema = getattr(tool, "inputSchema", None)
+        if not schema:
+            return {}
+        if isinstance(schema, dict):
+            required = schema.get("required") or []
+            props = schema.get("properties") or {}
+            if not required:
+                # No required args — pass empty dict to avoid validation errors
+                return {}
+            # Build minimal payload with only required fields
+            minimal: Dict[str, Any] = {}
+            for field in required:
+                if field in fallback_payload:
+                    minimal[field] = fallback_payload[field]
+                elif field in props:
+                    # Use a safe default based on type hint
+                    field_type = props[field].get("type", "string")
+                    minimal[field] = "" if field_type == "string" else None
+            return minimal
+    # No schema info — use empty dict (safer than passing unknown keys)
+    return {}
+
+
+def _jsonable_tool_result(result: Any) -> Any:
+    if hasattr(result, "model_dump"):
+        return result.model_dump()
+    if hasattr(result, "dict"):
+        return result.dict()
+    return str(result)
