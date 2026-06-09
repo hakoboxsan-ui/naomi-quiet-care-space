@@ -49,7 +49,7 @@ class NaomiRemoteApp:
             if api_key:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel("gemini-2.0-flash")
+                model = genai.GenerativeModel("gemini-2.5-flash")
                 result = model.generate_content(
                     f"You are NAOMI, a calm listening AI. Reply briefly in Japanese to: {text}"
                 )

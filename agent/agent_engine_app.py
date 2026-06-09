@@ -53,7 +53,7 @@ class NaomiAgentEngineApp:
                 import google.generativeai as genai  # type: ignore
 
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel("gemini-2.0-flash")
+                model = genai.GenerativeModel("gemini-2.5-flash")
                 result = model.generate_content(
                     f"You are NAOMI, a calm listening AI assistant. "
                     f"Reply briefly and warmly in Japanese to: {text}"

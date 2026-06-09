@@ -33,14 +33,17 @@ class GeminiBrain:
     
     # Model name candidates tried in order when the primary fails
     _MODEL_FALLBACKS = [
-        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-preview-05-20",
+        "gemini-2.5-pro",
         "gemini-2.0-flash-exp",
+        "gemini-2.0-flash-lite",
         "gemini-1.5-flash-latest",
+        "gemini-1.5-flash-002",
         "gemini-1.5-flash",
-        "gemini-pro",
     ]
 
-    def __init__(self, model_name: str = "gemini-2.0-flash"):
+    def __init__(self, model_name: str = "gemini-2.5-flash"):
         self.model_name = model_name
         self.is_available = bool(API_KEY and genai)
         if self.is_available:
@@ -80,7 +83,7 @@ class GeminiBrain:
             location = os.getenv("GOOGLE_CLOUD_LOCATION") or os.getenv("GOOGLE_CLOUD_REGION") or "us-central1"
             if project:
                 vertexai.init(project=project, location=location)
-            for vname in ["gemini-2.0-flash-001", "gemini-2.0-flash", "gemini-1.5-flash-001", "gemini-1.5-flash"]:
+            for vname in ["gemini-2.5-flash", "gemini-2.5-flash-preview-05-20", "gemini-2.0-flash-exp", "gemini-1.5-flash-002", "gemini-1.5-flash-001"]:
                 try:
                     vm = VertexGenerativeModel(vname)
                     response = vm.generate_content(prompt)
@@ -104,7 +107,7 @@ class GeminiBrain:
         import urllib.error
         import subprocess
 
-        models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]
+        models = ["gemini-2.5-flash", "gemini-2.5-flash-preview-05-20", "gemini-2.0-flash-exp", "gemini-1.5-flash-002"]
         for model in models:
             try:
                 token_proc = subprocess.run(
