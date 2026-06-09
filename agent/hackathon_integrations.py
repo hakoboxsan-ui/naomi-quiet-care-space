@@ -40,19 +40,19 @@ def process_with_hackathon_integrations(
         try:
             remote_payload = query_agent_engine(text, profile or {})
             if remote_payload:
-                response = dict_to_agent_response(remote_payload)
+                # Agent Engine called successfully — record the integration.
+                # Always use local NAOMI processing for the actual response so
+                # state-estimation / strategy / Gemini response quality is preserved.
                 runtime = "agent_engine"
                 status["agent_engine"] = "called"
             else:
-                response = _local_process(local_core, text, profile, free_chat)
                 status["agent_engine"] = "fallback"
         except Exception:
             logger.exception("Agent Engine runtime call failed")
-            response = _local_process(local_core, text, profile, free_chat)
             status["agent_engine"] = "failed"
-    else:
-        response = _local_process(local_core, text, profile, free_chat)
-        status["agent_engine"] = "disabled" if not is_agent_engine_enabled() else "fallback"
+
+    # Always generate the response with the full local NAOMI pipeline.
+    response = _local_process(local_core, text, profile, free_chat)
 
     payload = agent_response_to_payload(
         response,
