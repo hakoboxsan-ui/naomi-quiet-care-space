@@ -51,7 +51,19 @@ def dict_to_agent_response(data: Dict[str, Any]) -> AgentResponse:
     state_data = data.get("state") if isinstance(data.get("state"), dict) else {}
     strategy_data = data.get("strategy") if isinstance(data.get("strategy"), dict) else {}
     state = HumanState(**_filter_kwargs(HumanState, state_data))
-    strategy = AgentStrategy(**_filter_kwargs(AgentStrategy, strategy_data))
+    # Provide safe defaults so AgentStrategy can be built even when the remote
+    # runtime (e.g. Agent Engine) returns a minimal payload with no strategy dict.
+    _strategy_defaults: Dict[str, Any] = {
+        "advice_mode": "OFF",
+        "listening_mode": True,
+        "speech_density": "LOW",
+        "pause_length": "LONG",
+        "emotional_tone": "Calm",
+        "goal": "Listening",
+        "pressure_level": "VERY_LOW",
+    }
+    _strategy_defaults.update(_filter_kwargs(AgentStrategy, strategy_data))
+    strategy = AgentStrategy(**_strategy_defaults)
     mode = _mode_from_value(data.get("mode"))
 
     response = AgentResponse(
