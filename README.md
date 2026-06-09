@@ -249,3 +249,7 @@ gcloud run deploy naomi \
 ```
 
 Use `--set-secrets` or Cloud Run secret-backed environment variables for real API keys such as `GEMINI_API_KEY`, `ARIZE_API_KEY`, and any Phoenix credentials.
+
+<img width="798" height="767" alt="スクリーンショット 2026-06-09 191613" src="https://github.com/user-attachments/assets/f9c5ac6b-e13a-4047-82ec-4a60a02e4535" />
+<img width="827" height="826" alt="スクリーンショット 2026-06-09 191605" src="https://github.com/user-attachments/assets/ee8f0a01-ac38-4c86-b105-cebb1349aa02" />
+
