@@ -217,12 +217,13 @@ def active_profile():
     return profile
 
 def naomi_process(text, profile=None, free_chat=False):
-    return process_with_hackathon_integrations(
-        text,
-        profile or active_profile(),
-        st.session_state.agent_core,
-        free_chat=free_chat,
-    )
+    with st.spinner("　ゆっくり、受け取っています…"):
+        return process_with_hackathon_integrations(
+            text,
+            profile or active_profile(),
+            st.session_state.agent_core,
+            free_chat=free_chat,
+        )
 
 def hackathon_debug_payload(result):
     return getattr(result, "_hackathon_debug", {}) or {}
