@@ -1,3 +1,11 @@
 google-generativeai
 python-dotenv
 streamlit
+google-cloud-aiplatform
+mcp
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp
+arize-phoenix-otel
+openinference-instrumentation
+openinference-semantic-conventions

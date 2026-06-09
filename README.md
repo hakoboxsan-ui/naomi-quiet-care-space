@@ -169,3 +169,83 @@ No API key is required for basic operation. When neither Gemini key is configure
 *   NAOMIは医療診断を行うAIではなく、医師や専門家への相談を円滑にするための「対話・状態整理支援ツール」です。
 *   状態推定や出力される「状態整理メモ (Staff Note)」は客観的整理のための目安であり、病名の断定や特定の症状を確定診断するものではありません。
 *   緊急を要する心身の不調や、深刻な精神的苦痛を感じている場合は、速やかに専門の医療機関や公的相談窓口に直接ご相談ください。
+
+## Required Hackathon Integrations
+
+This project uses the required hackathon runtime integrations:
+- Gemini is called in `agent/gemini_brain.py` through `generate_content()`.
+- Google Cloud Agent Engine is called in `agent/agent_engine_client.py` when `NAOMI_AGENT_ENGINE_RESOURCE` is configured.
+- Arize MCP Server is called in `agent/arize_mcp_client.py` through `ClientSession.call_tool(...)`.
+- The runtime status is visible in the Streamlit debug expander.
+
+Partner Track: Arize
+
+Agent Builder option: Google Cloud Agent Engine
+
+Gemini:
+- file: `agent/gemini_brain.py`
+- runtime call: `google.generativeai.GenerativeModel(...).generate_content(...)`
+- env: `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+
+Agent Engine:
+- file: `agent/agent_engine_app.py`
+- file: `agent/agent_engine_client.py`
+- deploy script: `scripts/deploy_agent_engine.py`
+- runtime env: `NAOMI_AGENT_ENGINE_RESOURCE`
+- local fallback: if `NAOMI_AGENT_ENGINE_RESOURCE` is not set, NAOMI continues through the local `NaomiAgentCore`.
+
+Arize MCP:
+- file: `agent/arize_mcp_client.py`
+- runtime call: `ClientSession.call_tool(...)`
+- runtime env: `ARIZE_MCP_COMMAND`, optional `ARIZE_MCP_ARGS_JSON`, `ARIZE_MCP_TOOL_NAME`, `ARIZE_API_KEY`, `ARIZE_SPACE_ID`
+- if `ARIZE_MCP_COMMAND` is not set, the MCP integration reports `disabled` and the app keeps running.
+- official Phoenix MCP package: `@arizeai/phoenix-mcp@latest`
+- Cloud Run example: `ARIZE_MCP_COMMAND=npx` and `ARIZE_MCP_ARGS_JSON=["-y","@arizeai/phoenix-mcp@latest","--baseUrl","https://app.phoenix.arize.com","--apiKey","YOUR_PHOENIX_API_KEY"]`
+- Windows local testing may need `ARIZE_MCP_COMMAND=npx.cmd` because PowerShell can block `npx.ps1`.
+
+Phoenix / OpenTelemetry:
+- file: `agent/arize_tracing.py`
+- runtime env: `PHOENIX_COLLECTOR_ENDPOINT`
+- this is additional observability and does not replace the required Arize MCP `call_tool` runtime path.
+
+Unified runtime entry:
+- file: `agent/hackathon_integrations.py`
+- UI integration: `frontend/streamlit_app.py`
+- runtime flag: set `ENABLE_HACKATHON_INTEGRATIONS=true` for the judging deployment.
+- the Streamlit UI includes a collapsed `Hackathon runtime integrations` expander showing Gemini, Agent Engine, Arize MCP, Phoenix/OpenTelemetry, and Trace ID status.
+
+Verification:
+
+```bash
+python scripts/verify_hackathon_integrations.py --offline
+python scripts/verify_hackathon_integrations.py --online
+```
+
+Local development works without Agent Engine or Arize environment variables. For the judging Cloud Run deployment, set `ENABLE_HACKATHON_INTEGRATIONS=true`, put the Agent Engine resource name in `NAOMI_AGENT_ENGINE_RESOURCE`, and put the Arize MCP server command in `ARIZE_MCP_COMMAND`. Do not commit API keys or secrets to GitHub; use Cloud Run secrets or environment variables.
+
+The included Cloud Run `Dockerfile` installs Node.js and npm so an Arize MCP command that uses `npx` can start inside the container. If your Arize MCP server uses a different CLI, add that runtime dependency before deploying.
+
+Deploy Agent Engine:
+
+```bash
+set GOOGLE_CLOUD_PROJECT=YOUR_PROJECT
+set GOOGLE_CLOUD_LOCATION=us-central1
+set VERTEX_AI_STAGING_BUCKET=gs://YOUR_BUCKET
+python scripts/deploy_agent_engine.py
+```
+
+The script prints the resource name. Set that value as `NAOMI_AGENT_ENGINE_RESOURCE`.
+
+Judging Cloud Run example:
+
+```bash
+gcloud run deploy naomi \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory 1Gi \
+  --cpu 1 \
+  --set-env-vars ENABLE_HACKATHON_INTEGRATIONS=true,GOOGLE_CLOUD_PROJECT=YOUR_PROJECT,GOOGLE_CLOUD_LOCATION=us-central1,NAOMI_AGENT_ENGINE_RESOURCE=YOUR_AGENT_ENGINE_RESOURCE,ARIZE_MCP_COMMAND=YOUR_ARIZE_MCP_COMMAND,ARIZE_MCP_TOOL_NAME=YOUR_ARIZE_MCP_TOOL
+```
+
+Use `--set-secrets` or Cloud Run secret-backed environment variables for real API keys such as `GEMINI_API_KEY`, `ARIZE_API_KEY`, and any Phoenix credentials.

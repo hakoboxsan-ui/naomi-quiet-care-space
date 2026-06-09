@@ -14,6 +14,7 @@ import agent.core as core_module
 importlib.reload(mode_selector_module)
 importlib.reload(core_module)
 from agent.core import NaomiAgentCore
+from agent.hackathon_integrations import process_with_hackathon_integrations
 from agent.personal_baseline import load_profiles, get_profile, update_profile
 from agent.proactive_care import generate_checkin_question
 
@@ -214,6 +215,33 @@ def active_profile():
     profile = dict(get_profile(st.session_state.current_user_id))
     profile["language"] = st.session_state.get("language", "JP")
     return profile
+
+def naomi_process(text, profile=None, free_chat=False):
+    return process_with_hackathon_integrations(
+        text,
+        profile or active_profile(),
+        st.session_state.agent_core,
+        free_chat=free_chat,
+    )
+
+def hackathon_debug_payload(result):
+    return getattr(result, "_hackathon_debug", {}) or {}
+
+def show_hackathon_runtime_debug(result):
+    payload = hackathon_debug_payload(result)
+    if not payload:
+        return
+    status = payload.get("integration_status", {}) or {}
+    with st.expander("Hackathon runtime integrations", expanded=False):
+        st.write({
+            "Gemini": status.get("gemini", "fallback"),
+            "Agent Engine": status.get("agent_engine", "disabled"),
+            "Arize MCP": status.get("arize_mcp", "disabled"),
+            "Phoenix/OpenTelemetry": status.get("phoenix_otel", "disabled"),
+            "Trace ID": status.get("trace_id") or payload.get("trace_id"),
+        })
+        if payload.get("arize_mcp_result"):
+            st.write({"Arize MCP result": payload.get("arize_mcp_result")})
 
 EN_RESPONSE_BY_SCENARIO = {
     "tired": "You've worked really hard today.\nYou don't have to organize anything right now. Let's just catch your breath here.",
@@ -1978,10 +2006,7 @@ if st.session_state.naomi_screen == "start":
             submitted_start_chat = st.form_submit_button(start_send, use_container_width=True)
 
     if submitted_start_chat and start_user_text.strip():
-        if hasattr(st.session_state.agent_core, "process_free_chat"):
-            result = st.session_state.agent_core.process_free_chat(start_user_text.strip(), active_profile())
-        else:
-            result = st.session_state.agent_core.process_input(start_user_text.strip(), active_profile())
+        result = naomi_process(start_user_text.strip(), active_profile(), free_chat=True)
         st.session_state.last_result = (start_user_text.strip(), result)
         st.session_state.proactive_question = None
         st.rerun()
@@ -2005,6 +2030,7 @@ if st.session_state.naomi_screen == "start":
                 <p style="font-size:1.02rem; line-height:1.85; margin:0;">{result_text_display}</p>
             </div>
             """, unsafe_allow_html=True)
+            show_hackathon_runtime_debug(result)
 
     st.markdown(f"""
     <div class="naomi-start-divider"></div>
@@ -2089,10 +2115,7 @@ if st.session_state.naomi_screen == "home":
         with home_send_col:
             submitted_home_chat = st.form_submit_button(tr("Send quietly", "そっと送る"), use_container_width=True)
     if submitted_home_chat and home_user_text.strip():
-        if hasattr(st.session_state.agent_core, "process_free_chat"):
-            result = st.session_state.agent_core.process_free_chat(home_user_text.strip(), active_profile())
-        else:
-            result = st.session_state.agent_core.process_input(home_user_text.strip(), active_profile())
+        result = naomi_process(home_user_text.strip(), active_profile(), free_chat=True)
         st.session_state.last_result = (home_user_text.strip(), result)
         st.session_state.proactive_question = None
         st.rerun()
@@ -2114,6 +2137,7 @@ if st.session_state.naomi_screen == "home":
                 <p style="font-size:1.02rem; line-height:1.85; margin:0;">{result_text_display}</p>
             </div>
             """, unsafe_allow_html=True)
+            show_hackathon_runtime_debug(result)
     st.stop()
 
 # ── 🌿 NAOMIを使う方への静かな案内 ──
@@ -2311,7 +2335,7 @@ with st.form("state_free_text_form", clear_on_submit=True):
     with state_send_col:
         submitted_free_text = st.form_submit_button("そっと送る", use_container_width=True)
 if submitted_free_text and state_free_text.strip():
-    result = st.session_state.agent_core.process_input(state_free_text.strip(), active_profile())
+    result = naomi_process(state_free_text.strip(), active_profile())
     st.session_state.last_result = (state_free_text.strip(), result)
     st.session_state.proactive_question = None
     st.rerun()
@@ -2339,6 +2363,7 @@ if st.session_state.last_result:
             <p style="font-size: 1.02rem; line-height: 1.8; margin: 0;">{result_text_display}</p>
         </div>
         """, unsafe_allow_html=True)
+        show_hackathon_runtime_debug(result)
 
 st.markdown("<hr style='border: 0; border-top: 1px solid rgba(106, 140, 175, 0.05); margin: 1.5rem 0;'>", unsafe_allow_html=True)
 
@@ -2397,7 +2422,7 @@ if st.session_state.naomi_active_mode == "🌙 少し疲れている":
         st.markdown('<div class="status-btn-exhausted"></div>', unsafe_allow_html=True)
         if st.button(tr("🔥 At my limit, need a little guidance", "🔥 限界で、少し助言がほしい"), key="state_btn_exhausted", use_container_width=True):
             text = "どうしたらいいか教えてほしいけど、正直もう疲れてる"
-            result = st.session_state.agent_core.process_input(text, active_profile())
+            result = naomi_process(text, active_profile())
             st.session_state.last_result = (text, result)
             st.session_state.proactive_question = None
             st.rerun()
@@ -2406,7 +2431,7 @@ if st.session_state.naomi_active_mode == "🌙 少し疲れている":
         st.markdown('<div class="status-btn-anxiety"></div>', unsafe_allow_html=True)
         if st.button(tr("😰 Feeling anxious", "😰 不安を感じる"), key="state_btn_anxiety", use_container_width=True):
             text = "明日のことを考えると不安で落ち着かない"
-            result = st.session_state.agent_core.process_input(text, active_profile())
+            result = naomi_process(text, active_profile())
             st.session_state.last_result = (text, result)
             st.session_state.proactive_question = None
             st.rerun()
@@ -2415,7 +2440,7 @@ if st.session_state.naomi_active_mode == "🌙 少し疲れている":
         st.markdown('<div class="status-btn-tired"></div>', unsafe_allow_html=True)
         if st.button(tr("😮‍💨 Tired", "😮‍💨 疲れている"), key="state_btn_tired", use_container_width=True):
             text = "最近ちょっと疲れてて…"
-            result = st.session_state.agent_core.process_input(text, active_profile())
+            result = naomi_process(text, active_profile())
             st.session_state.last_result = (text, result)
             st.session_state.proactive_question = None
             st.rerun()
@@ -2426,7 +2451,7 @@ if st.session_state.naomi_active_mode == "🌙 少し疲れている":
         if st.button(tr("🌙 Sleepless night", "🌙 眠れない夜"), key="state_btn_insomnia", use_container_width=True):
             text = "明日も早いのに、考えごとが止まらなくて眠れない"
             profile = active_profile()
-            result = st.session_state.agent_core.process_input(text, profile)
+            result = naomi_process(text, profile)
             st.session_state.last_result = (text, result)
             st.session_state.proactive_question = None
             # 眠れない夜を選択時は、低圧なQuiet Nightへ自動移行！
@@ -2437,7 +2462,7 @@ if st.session_state.naomi_active_mode == "🌙 少し疲れている":
         st.markdown('<div class="status-btn-lonely"></div>', unsafe_allow_html=True)
         if st.button(tr("😢 Lonely", "😢 一人で寂しい"), key="state_btn_lonely", use_container_width=True):
             text = "なんか一人でいる感じがして寂しい"
-            result = st.session_state.agent_core.process_input(text, active_profile())
+            result = naomi_process(text, active_profile())
             st.session_state.last_result = (text, result)
             st.session_state.proactive_question = None
             st.rerun()
@@ -2456,7 +2481,7 @@ if st.session_state.naomi_active_mode == "🌙 少し疲れている":
     
     col_acc1, col_acc2, col_acc3, col_acc4, col_acc5 = st.columns(5)
     with col_acc1:
-        _tog1 = "Aa Large text" if st.session_state.get("language", "JP") == "EN" else "Aa 大きい文字"
+        _tog1 = "Large text" if st.session_state.get("language", "JP") == "EN" else "大きい文字"
         st.toggle(_tog1, key="acc_large_font", on_change=sync_large_font_from_acc)
     with col_acc2:
         _tog2 = "👆 Button only" if st.session_state.get("language", "JP") == "EN" else "👆 ボタン入力"
@@ -2778,7 +2803,7 @@ if st.session_state.naomi_active_mode == "🧠 考えすぎている":
             with col:
                 if st.button(label, key=f"demo_p3_{sid}", use_container_width=True):
                     profile = active_profile()
-                    result = st.session_state.agent_core.process_input(text, profile)
+                    result = naomi_process(text, profile)
                     st.session_state.last_result = (text, result)
                     st.session_state.proactive_question = None
                     st.rerun()
@@ -3194,7 +3219,7 @@ user_input = st.chat_input(
 if user_input:
     try:
         profile = active_profile()
-        result = st.session_state.agent_core.process_input(user_input, profile)
+        result = naomi_process(user_input, profile)
         st.session_state.last_result = (user_input, result)
         # 手動クリックによるプロアクティブ質問は、一度返答があればクリアする
         st.session_state.proactive_question = None
@@ -3254,6 +3279,7 @@ if st.session_state.last_result and not suppress_bottom_chat:
             <p style="font-size: 1.05rem; line-height: 1.8; margin-bottom: 0;">{result_text_display}</p>
         </div>
         """, unsafe_allow_html=True)
+        show_hackathon_runtime_debug(result)
 
     # 1.4 受け止め方の違い（表向きは静かな表現にする）
     stress_val = round(result.state.stress * 100)

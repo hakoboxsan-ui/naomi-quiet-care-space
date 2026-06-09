@@ -13,7 +13,7 @@ except ModuleNotFoundError:
         return False
 
 # .envファイルを読み込む
-load_dotenv()
+load_dotenv(encoding="utf-8-sig")
 
 # ロギング設定
 logging.basicConfig(level=logging.INFO)
