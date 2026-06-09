@@ -72,7 +72,7 @@ class GeminiBrain:
         return self._call_gemini_via_vertex(prompt)
 
     def _call_gemini_via_vertex(self, prompt: str) -> Optional[str]:
-        """Vertex AI 経由でGeminiを呼び出す（ADC使用、AI Studio無料枠制限を受けない）。"""
+        """Vertex AI 経由でGeminiを呼び出す（ADC使用）。"""
         try:
             import vertexai
             from vertexai.generative_models import GenerativeModel as VertexGenerativeModel
@@ -80,20 +80,63 @@ class GeminiBrain:
             location = os.getenv("GOOGLE_CLOUD_LOCATION") or os.getenv("GOOGLE_CLOUD_REGION") or "us-central1"
             if project:
                 vertexai.init(project=project, location=location)
-            vertex_model_names = ["gemini-2.0-flash-001", "gemini-2.0-flash", "gemini-1.5-flash-001", "gemini-1.5-flash"]
-            for vname in vertex_model_names:
+            for vname in ["gemini-2.0-flash-001", "gemini-2.0-flash", "gemini-1.5-flash-001", "gemini-1.5-flash"]:
                 try:
                     vm = VertexGenerativeModel(vname)
                     response = vm.generate_content(prompt)
                     logger.info(f"Gemini via Vertex AI ({vname}) succeeded.")
-                    # Mark as available for next calls
                     self.is_available = True
                     return response.text
                 except Exception as ve:
                     logger.warning(f"Vertex AI model {vname} failed: {ve}")
                     continue
         except Exception as e:
-            logger.error(f"Vertex AI Gemini fallback failed: {e}")
+            logger.warning(f"Vertex AI Gemini fallback failed: {e}")
+
+        # Last resort: call Generative Language API via gcloud OAuth token (no API key needed)
+        return self._call_gemini_via_gcloud_token(prompt)
+
+    def _call_gemini_via_gcloud_token(self, prompt: str) -> Optional[str]:
+        """gcloud auth print-access-token を使い OAuth Bearer で Gemini REST API を呼ぶ。
+        AI Studio APIキーの quota に影響されない。Cloud Shell / Cloud Run 上で動作。"""
+        import json as _json
+        import urllib.request
+        import urllib.error
+        import subprocess
+
+        models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"]
+        for model in models:
+            try:
+                token_proc = subprocess.run(
+                    ["gcloud", "auth", "print-access-token"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                if token_proc.returncode != 0:
+                    logger.warning("gcloud auth print-access-token failed; skipping REST fallback")
+                    return None
+                token = token_proc.stdout.strip()
+
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                body = _json.dumps({
+                    "contents": [{"role": "user", "parts": [{"text": prompt}]}]
+                }).encode()
+                req = urllib.request.Request(
+                    url, data=body,
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = _json.loads(resp.read())
+                    text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    logger.info(f"Gemini via gcloud OAuth token ({model}) succeeded.")
+                    self.is_available = True
+                    return text
+            except urllib.error.HTTPError as he:
+                logger.warning(f"Gemini REST {model} HTTP {he.code}: {he.read()[:200]}")
+                continue
+            except Exception as e:
+                logger.warning(f"Gemini REST {model} failed: {e}")
+                continue
         return None
 
     def analyze_human_state(self, text: str, profile: Optional[Dict] = None) -> Optional[Dict[str, float]]:
