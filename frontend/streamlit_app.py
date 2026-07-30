@@ -2,6 +2,7 @@ import streamlit as st
 import sys
 import os
 import importlib
+import hashlib
 from datetime import datetime
 from dataclasses import asdict
 from textwrap import dedent
@@ -17,6 +18,10 @@ from agent.core import NaomiAgentCore
 from agent.hackathon_integrations import process_with_hackathon_integrations
 from agent.personal_baseline import load_profiles, get_profile, update_profile
 from agent.proactive_care import generate_checkin_question
+from agent.tts_adapter import (
+    MAX_CHARACTERS as VOICE_MAX_CHARACTERS,
+    create_default_controller,
+)
 
 # 笏笏 荳闊ｬ逧・↑AI縺ｮ蝗ｺ螳夊ｿ皮ｭ費ｼ域ｯ碑ｼ・ョ繝｢逕ｨ・・笏笏
 GENERIC_AI_RESPONSES = {
@@ -229,20 +234,7 @@ def hackathon_debug_payload(result):
     return getattr(result, "_hackathon_debug", {}) or {}
 
 def show_hackathon_runtime_debug(result):
-    payload = hackathon_debug_payload(result)
-    if not payload:
-        return
-    status = payload.get("integration_status", {}) or {}
-    with st.expander("Hackathon runtime integrations", expanded=False):
-        st.write({
-            "Gemini": status.get("gemini", "fallback"),
-            "Agent Engine": status.get("agent_engine", "disabled"),
-            "Arize MCP": status.get("arize_mcp", "disabled"),
-            "Phoenix/OpenTelemetry": status.get("phoenix_otel", "disabled"),
-            "Trace ID": status.get("trace_id") or payload.get("trace_id"),
-        })
-        if payload.get("arize_mcp_result"):
-            st.write({"Arize MCP result": payload.get("arize_mcp_result")})
+    return
 
 EN_RESPONSE_BY_SCENARIO = {
     "tired": "You've worked really hard today.\nYou don't have to organize anything right now. Let's just catch your breath here.",
@@ -291,6 +283,7 @@ def phase_label(result):
 def reset_agent_session():
     if "agent_core" in st.session_state and hasattr(st.session_state.agent_core, "reset_session"):
         st.session_state.agent_core.reset_session()
+    discard_voice_audio(stop_generation=True)
     st.session_state.last_result = None
     st.session_state.proactive_question = None
 
@@ -301,6 +294,7 @@ def switch_mode(mode):
     st.rerun()
 
 def keep_menu_top_once():
+    discard_voice_audio(stop_generation=True)
     st.session_state.suppress_bottom_chat_once = True
     st.session_state.last_result = None
     st.session_state.proactive_question = None
@@ -359,6 +353,84 @@ def sync_large_font_from_main():
 for k in ["acc_button_only", "acc_short_response", "acc_no_audio", "acc_no_talk"]:
     if k not in st.session_state:
         st.session_state[k] = False
+
+VOICE_WARNING = "周囲に音声が聞こえる可能性があります。必要なときだけご利用ください。"
+VOICE_LONG_TEXT_MESSAGE = "この文章は長いため、現在の音声機能では読み上げられません。文章はそのままお読みいただけます。"
+VOICE_ERROR_MESSAGE = "音声を準備できませんでした。文章はそのままご利用いただけます。"
+
+
+def voice_feature_enabled() -> bool:
+    return os.getenv("NAOMI_VOICE_ENABLED", "").strip().lower() == "true"
+
+
+def _voice_digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def discard_voice_audio(*, stop_generation: bool) -> None:
+    controller = st.session_state.get("naomi_voice_controller")
+    if stop_generation and controller is not None:
+        controller.stop()
+    st.session_state.pop("naomi_voice_audio_bytes", None)
+    st.session_state.pop("naomi_voice_audio_digest", None)
+    st.session_state.pop("naomi_voice_error", None)
+
+
+def sync_voice_state() -> None:
+    last_result = st.session_state.get("last_result")
+    text = ""
+    if last_result:
+        result = last_result[1]
+        text = getattr(result, "text", "") or ""
+    digest = _voice_digest(text) if text else None
+    if st.session_state.get("naomi_voice_result_digest") != digest:
+        discard_voice_audio(stop_generation=True)
+        st.session_state.naomi_voice_result_digest = digest
+    if st.session_state.get("acc_no_audio", False) or not voice_feature_enabled():
+        discard_voice_audio(stop_generation=True)
+
+
+def render_voice_controls(text: str, *, key: str) -> None:
+    if not text or not voice_feature_enabled() or st.session_state.get("acc_no_audio", False):
+        return
+
+    digest = _voice_digest(text)
+    if len(text) > VOICE_MAX_CHARACTERS:
+        discard_voice_audio(stop_generation=True)
+        st.info(VOICE_LONG_TEXT_MESSAGE)
+        return
+
+    st.caption(VOICE_WARNING)
+    if st.button("🔊 読んでもらう", key=f"naomi_voice_{key}"):
+        discard_voice_audio(stop_generation=True)
+        try:
+            controller = create_default_controller()
+            st.session_state.naomi_voice_controller = controller
+            with st.spinner("音声を準備しています…"):
+                wav_bytes = controller.synthesize_wav(
+                    text,
+                    acc_no_audio=st.session_state.get("acc_no_audio", False),
+                )
+            st.session_state.naomi_voice_audio_bytes = wav_bytes
+            st.session_state.naomi_voice_audio_digest = digest
+        except Exception:
+            discard_voice_audio(stop_generation=True)
+            st.session_state.naomi_voice_error = True
+
+    if st.session_state.get("naomi_voice_error"):
+        st.warning(VOICE_ERROR_MESSAGE)
+    if (
+        st.session_state.get("naomi_voice_audio_digest") == digest
+        and st.session_state.get("naomi_voice_audio_bytes")
+    ):
+        st.audio(
+            st.session_state.naomi_voice_audio_bytes,
+            format="audio/wav",
+            autoplay=False,
+        )
+
+
+sync_voice_state()
 
 # 笏笏 繝・じ繧､繝ｳ繧ｷ繧ｹ繝・Β CSS 豕ｨ蜈･ (Step 1: Calm Light / Quiet Night) 笏笏
 theme_mode = st.session_state.get("theme_mode", "light")
@@ -2032,6 +2104,7 @@ if st.session_state.naomi_screen == "start":
             </div>
             """, unsafe_allow_html=True)
             show_hackathon_runtime_debug(result)
+            render_voice_controls(result.text, key="start")
 
     st.markdown(f"""
     <div class="naomi-start-divider"></div>
@@ -2139,6 +2212,7 @@ if st.session_state.naomi_screen == "home":
             </div>
             """, unsafe_allow_html=True)
             show_hackathon_runtime_debug(result)
+            render_voice_controls(result.text, key="home")
     st.stop()
 
 # ── 🌿 NAOMIを使う方への静かな案内 ──
@@ -2365,6 +2439,7 @@ if st.session_state.last_result:
         </div>
         """, unsafe_allow_html=True)
         show_hackathon_runtime_debug(result)
+        render_voice_controls(result.text, key="state")
 
 st.markdown("<hr style='border: 0; border-top: 1px solid rgba(106, 140, 175, 0.05); margin: 1.5rem 0;'>", unsafe_allow_html=True)
 
@@ -3281,6 +3356,7 @@ if st.session_state.last_result and not suppress_bottom_chat:
         </div>
         """, unsafe_allow_html=True)
         show_hackathon_runtime_debug(result)
+        render_voice_controls(result.text, key="bottom")
 
     # 1.4 受け止め方の違い（表向きは静かな表現にする）
     stress_val = round(result.state.stress * 100)

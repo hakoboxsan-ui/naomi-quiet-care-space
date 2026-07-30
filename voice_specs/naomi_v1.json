@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "voice_id": "naomi_v1",
+  "display_name": "NAOMI v1",
+  "status": "fixed_candidate",
+  "spec_version": "1.0.0",
+  "engine": {
+    "name": "Style-BERT-VITS2",
+    "model_candidate": "naomi_v1_good_50min_sbv2_train01",
+    "checkpoint": {
+      "step": 6000,
+      "epoch": 26,
+      "filename": "naomi_v1_good_50min_sbv2_train01_e26_s6000.safetensors",
+      "path": "../AIVtuberApp/Style-BERT-VITS2/model_assets/naomi_v1_good_50min_sbv2_train01/naomi_v1_good_50min_sbv2_train01_e26_s6000.safetensors"
+    }
+  },
+  "inference": {
+    "language": "JP",
+    "style": "Neutral",
+    "sdp_ratio": 0.2,
+    "speed": 0.88,
+    "length": 1.136364,
+    "punctuation_policy": "preserve_original_natural_punctuation",
+    "style_vector_policy": "use_trained_audio_mean_style_vector"
+  },
+  "post_processing": {
+    "irodori_tts": false,
+    "normalization": false,
+    "limiter": false,
+    "automatic_volume_processing": false
+  },
+  "role": {
+    "intended_use": [
+      "quiet_low_pressure_voice_guidance",
+      "state_guidance",
+      "short_reassurance",
+      "accessibility_support"
+    ],
+    "target_users": [
+      "older_adults",
+      "users_with_visual_impairments",
+      "users_with_text_input_or_reading_burden",
+      "users_needing_calm_low_pressure_support"
+    ],
+    "medical_care_waiting_room_suitability": "passed"
+  },
+  "validation": {
+    "human_listening": "passed",
+    "pronunciation": "passed",
+    "japanese_intonation": "passed",
+    "low_pressure_fit": "passed",
+    "waiting_room_reassurance": "passed",
+    "additional_training_required": false,
+    "validated_at": "2026-07-11"
+  },
+  "technical_notes": {
+    "peak_caution": true,
+    "observed_peak": 0.99996948,
+    "audible_clipping_reported": false,
+    "blocking": false,
+    "production_peak_management_review_required": true
+  },
+  "approval": {
+    "human_approved": true,
+    "approved_at": "2026-07-11",
+    "approval_scope": "voice_spec_candidate_fixation"
+  },
+  "references": [
+    "docs/voice/naomi_voice_profile.md",
+    "docs/voice/naomi_sbv2_train01_listening_eval.md",
+    "docs/voice/naomi_sbv2_train01_decision_notes.md",
+    "docs/voice/naomi_waiting_room_voice_validation.md",
+    "docs/voice/naomi_v1_voice_spec_fixation_preflight.md"
+  ]
+}
